@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# nudnik — morning briefing + tasks, read-only (rules: CLAUDE.md)
+# Usage: nudnik init | briefing | status | send <file>
+set -euo pipefail
+N=$(cd "$(dirname "$0")/.." && pwd); C=~/.config/nudnik; O=$C/owner.env; cd "$N"
+[ -f $O ] || { mkdir -p -m 700 $C; install -m 600 owner.env.example $O; install -m 600 mcp.json.example $C/mcp.json
+  install -m 600 /dev/null $C/telegram.env; echo "Created $C: fill in owner.env, mcp.json and telegram.env, then run init again."; exit 0; }
+source $O
+# The only tools a scheduled run gets: files in this folder + read-only WhatsApp (+ read-only mail when configured).
+TOOLS="Read Write Edit Glob Grep mcp__wa__get_status mcp__wa__list_chats mcp__wa__get_messages mcp__wa__search_messages ${MAIL_TOOLS:-}"
+run() {   # run <prompt> [model]; on failure the error goes to the journal
+  local o; o=$(claude -p "$1" --mcp-config $C/mcp.json --strict-mcp-config --allowedTools "$TOOLS" \
+    --disallowedTools "Bash WebFetch WebSearch Task" --output-format json ${2:+--model "$2"} 2>&1) \
+    || { echo "claude failed: ${o:0:400}" >&2; return 1; }; }
+send() {   # send <file>: plain text to TELEGRAM_CHAT_ID, split below Telegram's 4096-character limit
+  local t p d; t=$(sed -n 's/^TELEGRAM_BOT_TOKEN=//p' $C/telegram.env); [ -n "$t" ] && [ -n "$TELEGRAM_CHAT_ID" ] \
+    || { echo "Telegram not configured" >&2; return 1; }
+  d=$(mktemp -d); split -C 3500 "$1" "$d/part-"
+  for p in "$d"/part-*; do curl -fsS -m 30 -o /dev/null "https://api.telegram.org/bot$t/sendMessage" \
+    --data-urlencode "chat_id=$TELEGRAM_CHAT_ID" --data-urlencode "text@$p"; done; rm -r "$d"; }
+fail() { echo "nudnik: $1. Check the assistant." > state/fail; [ "${NOTIFY:-1}" = 0 ] || send state/fail; exit 1; }
+render() {   # TASKS.md = open tasks by priority then waiting-since; ARCHIVE.md = closed tasks, newest first
+  { echo "| Pri | Task | Status | Since | Due | Title |"; echo "|---|---|---|---|---|---|"; rows open | sort | cut -f2-; } > TASKS.md
+  { echo "| Closed | Task | Title |"; echo "|---|---|---|"; rows closed | sort -r | cut -f2-; } > ARCHIVE.md; }
+rows() {   # rows open|closed: one sortable line per task
+  for f in tasks/*/*/task.md; do [ -e "$f" ] || continue; d=${f%/task.md}; g() { sed -n "s/^$1: //p" "$f" | head -1; }
+    [ "$(g status)" = done ] && k=closed || k=open; [ $k = "$1" ] || continue
+    if [ $k = open ]; then printf '%s %s\t| %s | %s | %s | %s | %s | %s |\n' "$(g pri)" "$(g since)" "$(g pri)" "${d#tasks/}" \
+      "$(g status)" "$(g since)" "$(g due)" "$(g title)"
+    else printf '%s\t| %s | %s | %s |\n' "$(g closed)" "$(g closed)" "${d#tasks/}" "$(g title)"; fi; done; }
+mkdir -p briefing tasks state
+case "${1:-}" in
+  init)   # install the systemd user timer (Persistent: a run missed while the machine was off runs at boot)
+    loginctl enable-linger "$USER"; u=~/.config/systemd/user; mkdir -p $u
+    printf '[Service]\nType=oneshot\nEnvironment=PATH=%s:%s:/usr/bin:/bin\nExecStart=%s/bin/nudnik briefing\n' \
+      ~/.local/bin "$(dirname "$(command -v claude)")" "$N" > $u/nudnik.service
+    printf '[Timer]\nOnCalendar=*-*-* %s %s\nPersistent=true\n[Install]\nWantedBy=timers.target\n' "$BRIEFING_TIME" "$TZ_NAME" > $u/nudnik.timer
+    systemctl --user daemon-reload && systemctl --user enable --now nudnik.timer && systemctl --user list-timers nudnik.timer ;;
+  briefing)
+    d=$(date +%F); last=$(ls briefing | grep -v "^$d" | tail -1 || true); last=${last%.md}
+    run "$(cat prompts/briefing.md)
+Today is $d, now $(date +%H:%M) ($TZ_NAME). Last briefing: ${last:-none}." || fail "the morning briefing failed"
+    [ -s "briefing/$d.md" ] || fail "the morning briefing wrote nothing"
+    render; [ "${NOTIFY:-1}" = 0 ] || send "briefing/$d.md" ;;
+  status) render; cat TASKS.md ;;
+  send) send "$2" ;;
+  *) sed -n 3p "$0"; exit 1 ;;
+esac

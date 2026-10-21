@@ -1,0 +1,10 @@
+# private output and config: never commit
+briefing/
+tasks/
+state/
+TASKS.md
+ARCHIVE.md
+*.env
+mcp.json
+.mcp.json
+.claude/settings.local.json

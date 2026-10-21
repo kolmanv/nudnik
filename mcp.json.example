@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "wa": {
+      "type": "http",
+      "url": "https://wa.example.com/mcp",
+      "headers": {
+        "CF-Access-Client-Id": "<service token id>",
+        "CF-Access-Client-Secret": "<service token secret>"
+      }
+    }
+  }
+}
