@@ -19,6 +19,8 @@ don't depend on the model behaving:
 | A fixed tool list | Scheduled runs get only file tools and the read tools listed in `bin/nudnik`; no shell, no web |
 | No account connectors | `ENABLE_CLAUDEAI_MCP_SERVERS=false` and `--strict-mcp-config`: only the servers in your own `mcp.json` |
 | Fixed recipient | Telegram sending is a `curl` in the script, to the chat id in your config; Claude can't choose a recipient |
+| Chat limits | The chat session runs in `dontAsk` mode: tools not listed in `chat/settings.json` are refused, no prompts. It can read this folder, edit tasks, read WhatsApp and reply to you |
+| One Telegram user | The plugin's allowlist drops messages from anyone else, and replies only go to allowed chats |
 | Its own machine | Run it in its own container or VM with no access to your home network |
 
 Message and mail text is treated as data, never as instructions (see `CLAUDE.md`).
@@ -32,12 +34,20 @@ Message and mail text is treated as data, never as instructions (see `CLAUDE.md`
    - `telegram.env`: `TELEGRAM_BOT_TOKEN=...` from @BotFather
    - `mcp.json`: the read-only MCP servers (see `mcp.json.example`)
 3. Run `bin/nudnik init` again to install the timer, then `NOTIFY=0 bin/nudnik briefing` to try it without sending.
+4. To reply to nudnik in Telegram: `claude plugin install telegram@claude-plugins-official`, then
+   `claude plugin disable telegram@claude-plugins-official` (it is enabled only for the chat session, by
+   `chat/settings.json`), install [Bun](https://bun.sh), and create, mode 600:
+   - `~/.claude/channels/telegram/.env`: the same `TELEGRAM_BOT_TOKEN=...`
+   - `~/.claude/channels/telegram/access.json`:
+     `{"dmPolicy": "allowlist", "allowFrom": ["<your Telegram user id>"], "groups": {}, "pending": {}}`
+   Then `bin/nudnik init` once more starts the chat session (tmux `chat`).
 
 ## Use
 
 | Command | What |
 |---|---|
 | `bin/nudnik briefing` | collect, update tasks, write `briefing/<date>.md`, send it to Telegram (`NOTIFY=0` to skip sending) |
+| `bin/nudnik chat` | start the Telegram chat session in tmux `chat` (normally started by systemd) |
 | `bin/nudnik status` | regenerate and print `TASKS.md` (open) and `ARCHIVE.md` (closed) |
 | `bin/nudnik send <file>` | send a text file to your Telegram chat |
 | `journalctl --user -u nudnik` | logs of the scheduled runs |

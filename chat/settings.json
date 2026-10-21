@@ -1,0 +1,32 @@
+{
+  "enabledPlugins": {
+    "telegram@claude-plugins-official": true
+  },
+  "permissions": {
+    "allow": [
+      "Read(~/nudnik/**)",
+      "Read(~/.claude/channels/telegram/inbox/**)",
+      "Edit(~/nudnik/tasks/**)",
+      "Write(~/nudnik/tasks/**)",
+      "mcp__wa__get_status",
+      "mcp__wa__list_chats",
+      "mcp__wa__get_messages",
+      "mcp__wa__search_messages",
+      "mcp__plugin_telegram_telegram__reply",
+      "mcp__plugin_telegram_telegram__react",
+      "mcp__plugin_telegram_telegram__edit_message",
+      "mcp__plugin_telegram_telegram__download_attachment"
+    ],
+    "deny": [
+      "Bash",
+      "WebFetch",
+      "WebSearch",
+      "Task",
+      "Agent",
+      "Read(~/.config/**)",
+      "Read(~/.claude/**/.env)",
+      "Read(~/.claude/.credentials.json)",
+      "mcp__wa__get_new_messages"
+    ]
+  }
+}

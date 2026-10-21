@@ -30,13 +30,25 @@ rows() {   # rows open|closed: one sortable line per task
     else printf '%s\t| %s | %s | %s |\n' "$(g closed)" "$(g closed)" "${d#tasks/}" "$(g title)"; fi; done; }
 mkdir -p briefing tasks state
 case "${1:-}" in
-  init)   # install the systemd user timer (Persistent: a run missed while the machine was off runs at boot)
+  init)   # systemd user units: the daily briefing (Persistent: a run missed while off runs at boot), the Telegram
+          # chat session, and a weekly chat restart that picks up Claude updates (--continue keeps the conversation)
     [ "$(loginctl show-user "$USER" -p Linger --value)" = yes ] || loginctl enable-linger "$USER"
     export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}; u=~/.config/systemd/user; mkdir -p $u
-    printf '[Service]\nType=oneshot\nEnvironment=PATH=%s:%s:/usr/bin:/bin\nExecStart=%s/bin/nudnik briefing\n' \
-      ~/.local/bin "$(dirname "$(command -v claude)")" "$N" > $u/nudnik.service
+    P="PATH=$HOME/.local/bin:$HOME/.bun/bin:$(dirname "$(command -v claude)"):/usr/bin:/bin"
+    printf '[Service]\nType=oneshot\nEnvironment=%s\nExecStart=%s/bin/nudnik briefing\n' "$P" "$N" > $u/nudnik.service
     printf '[Timer]\nOnCalendar=*-*-* %s %s\nPersistent=true\n[Install]\nWantedBy=timers.target\n' "$BRIEFING_TIME" "$TZ_NAME" > $u/nudnik.timer
-    systemctl --user daemon-reload && systemctl --user enable --now nudnik.timer && systemctl --user list-timers nudnik.timer ;;
+    printf '[Service]\nType=oneshot\nRemainAfterExit=yes\nEnvironment=%s\nExecStart=%s/bin/nudnik chat\nExecStop=/usr/bin/tmux kill-session -t chat\n[Install]\nWantedBy=default.target\n' "$P" "$N" > $u/nudnik-chat.service
+    printf '[Service]\nType=oneshot\nExecStart=/usr/bin/systemctl --user restart nudnik-chat.service\n' > $u/nudnik-chat-restart.service
+    printf '[Timer]\nOnCalendar=Sun *-*-* 04:30 %s\n[Install]\nWantedBy=timers.target\n' "$TZ_NAME" > $u/nudnik-chat-restart.timer
+    systemctl --user daemon-reload && systemctl --user enable --now nudnik.timer
+    if [ -s ~/.claude/channels/telegram/access.json ]; then systemctl --user enable --now nudnik-chat.service nudnik-chat-restart.timer
+    else echo "Telegram chat not set up yet (see README): nudnik-chat.service not started."; fi
+    systemctl --user list-timers 'nudnik*' ;;
+  chat)   # the Telegram conversation in tmux "chat". It runs in chat/ so --continue resumes the chat, never a briefing run.
+    tmux has-session -t chat 2>/dev/null && { echo "already running"; exit 0; }
+    c=1; ls ~/.claude/projects/*-nudnik-chat/*.jsonl >/dev/null 2>&1 || c=
+    tmux new-session -d -s chat -x 200 -y 50 -c "$N/chat" "claude ${c:+--continue} --permission-mode dontAsk \
+      --settings $N/chat/settings.json --add-dir $N --mcp-config $C/mcp.json --channels plugin:telegram@claude-plugins-official" ;;
   briefing)
     d=$(date +%F); last=$(ls briefing | grep -v "^$d" | tail -1 || true); last=${last%.md}
     run "$(cat prompts/briefing.md)
