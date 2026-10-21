@@ -31,7 +31,8 @@ rows() {   # rows open|closed: one sortable line per task
 mkdir -p briefing tasks state
 case "${1:-}" in
   init)   # install the systemd user timer (Persistent: a run missed while the machine was off runs at boot)
-    loginctl enable-linger "$USER"; u=~/.config/systemd/user; mkdir -p $u
+    [ "$(loginctl show-user "$USER" -p Linger --value)" = yes ] || loginctl enable-linger "$USER"
+    export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}; u=~/.config/systemd/user; mkdir -p $u
     printf '[Service]\nType=oneshot\nEnvironment=PATH=%s:%s:/usr/bin:/bin\nExecStart=%s/bin/nudnik briefing\n' \
       ~/.local/bin "$(dirname "$(command -v claude)")" "$N" > $u/nudnik.service
     printf '[Timer]\nOnCalendar=*-*-* %s %s\nPersistent=true\n[Install]\nWantedBy=timers.target\n' "$BRIEFING_TIME" "$TZ_NAME" > $u/nudnik.timer
