@@ -17,6 +17,7 @@
       "mcp__wa__list_media",
       "mcp__wa__get_media",
       "mcp__wa__request_media",
+      "mcp__files__save_whatsapp_file",
       "mcp__plugin_telegram_telegram__reply",
       "mcp__plugin_telegram_telegram__react",
       "mcp__plugin_telegram_telegram__edit_message",

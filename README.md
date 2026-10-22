@@ -32,7 +32,7 @@ Message and mail text is treated as data, never as instructions (see `CLAUDE.md`
    creates `~/.config/nudnik/` from the examples. Then fill in, all mode 600 and never committed:
    - `owner.env`: your name, language, timezone, briefing time, Telegram chat id, what you care about
    - `telegram.env`: `TELEGRAM_BOT_TOKEN=...` from @BotFather
-   - `mcp.json`: the read-only MCP servers (see `mcp.json.example`)
+   - `mcp.json`: the read-only MCP servers, plus `files` (`bin/nudnik-files`) for the chat (see `mcp.json.example`)
 3. Run `bin/nudnik init` again to install the timer, then `NOTIFY=0 bin/nudnik briefing` to try it without sending.
 4. To reply to nudnik in Telegram: `claude plugin install telegram@claude-plugins-official`, then
    `claude plugin disable telegram@claude-plugins-official` (it is enabled only for the chat session, by
@@ -50,6 +50,7 @@ Message and mail text is treated as data, never as instructions (see `CLAUDE.md`
 | `bin/nudnik chat` | start the Telegram chat session in tmux `chat` (normally started by systemd) |
 | `bin/nudnik status` | regenerate and print `TASKS.md` (open) and `ARCHIVE.md` (closed) |
 | `bin/nudnik send <file>` | send a text file to your Telegram chat |
+| `bin/nudnik-files` | local MCP server for the chat: saves a WhatsApp file (gateway `/files/<id>`) so it can be sent to Telegram as is |
 | `journalctl --user -u nudnik` | logs of the scheduled runs |
 
 If the run fails, a one-line "briefing failed" message is sent instead, so silence never means "all fine".

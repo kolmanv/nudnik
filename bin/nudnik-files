@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+"""nudnik-files: a local MCP server (stdio, standard library only) with one tool, save_whatsapp_file.
+
+It downloads a saved WhatsApp file from the gateway's /files/<message id> into ~/.cache/nudnik/files and returns
+the path, so the chat can attach the original to a Telegram reply without the file passing through Claude, and
+without the chat session needing a shell. Uses the "wa" server's URL and Cloudflare headers from the MCP config
+(~/.config/nudnik/mcp.json). Files older than KEEP_HOURS are deleted on each call.
+"""
+import hashlib
+import json
+import os
+import re
+import shutil
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+
+CONFIG = os.path.expanduser("~/.config/nudnik/mcp.json")
+CACHE = os.path.expanduser("~/.cache/nudnik/files")
+KEEP_HOURS = 24
+MAX_BYTES = 50 * 2**20  # Telegram bots can send up to 50 MB
+TOOL = {
+    "name": "save_whatsapp_file",
+    "description": "Save a WhatsApp media message's original file (voice note, audio, image, video, PDF or other "
+                   "document) on this machine and return its path. To send it as it is, pass the path in the "
+                   "Telegram reply's files. Only files the gateway has saved: if it says to, call request_media "
+                   "first. Up to 50 MB.",
+    "inputSchema": {"type": "object", "properties": {"message_id": {"type": "string"}}, "required": ["message_id"]},
+}
+
+
+def cleanup():
+    cutoff = time.time() - KEEP_HOURS * 3600
+    for d in os.listdir(CACHE):
+        p = os.path.join(CACHE, d)
+        if os.path.getmtime(p) < cutoff:
+            shutil.rmtree(p, ignore_errors=True)
+
+
+def save(message_id):
+    if not re.fullmatch(r"[\w@.:-]{1,200}", message_id):
+        raise ValueError("not a WhatsApp message id")
+    wa = json.load(open(CONFIG))["mcpServers"]["wa"]
+    base = wa["url"].rsplit("/mcp", 1)[0]
+    req = urllib.request.Request(f"{base}/files/{urllib.parse.quote(message_id)}",
+                                 headers={**wa.get("headers", {}), "User-Agent": "nudnik-files/1"})
+    try:
+        r = urllib.request.urlopen(req, timeout=120)
+    except urllib.error.HTTPError as e:
+        try:
+            err = json.loads(e.read()).get("error")
+        except ValueError:
+            err = None
+        raise ValueError(err or f"gateway answered {e.code}") from None
+    size = int(r.headers.get("Content-Length") or 0)
+    if size > MAX_BYTES:
+        raise ValueError(f"file is {size / 2**20:.1f} MB; Telegram bots can send up to 50 MB")
+    m = re.search(r"filename\*=utf-8''([^;]+)", r.headers.get("Content-Disposition", ""), re.I)
+    name = os.path.basename(urllib.parse.unquote(m.group(1))) if m else "file"
+    os.makedirs(CACHE, mode=0o700, exist_ok=True)
+    cleanup()
+    d = os.path.join(CACHE, hashlib.sha256(message_id.encode()).hexdigest()[:12])
+    os.makedirs(d, exist_ok=True)
+    path = os.path.join(d, name or "file")
+    with open(path, "wb") as f:
+        shutil.copyfileobj(r, f)
+    if os.path.getsize(path) > MAX_BYTES:
+        os.remove(path)
+        raise ValueError("file is over 50 MB; Telegram bots can send up to 50 MB")
+    return {"path": path, "name": name, "size": os.path.getsize(path), "mimetype": r.headers.get("Content-Type")}
+
+
+def handle(msg):
+    method, params = msg.get("method"), msg.get("params") or {}
+    if method == "initialize":
+        return {"protocolVersion": params.get("protocolVersion", "2025-06-18"), "capabilities": {"tools": {}},
+                "serverInfo": {"name": "nudnik-files", "version": "1"}}
+    if method == "tools/list":
+        return {"tools": [TOOL]}
+    if method == "tools/call":
+        if params.get("name") != TOOL["name"]:
+            return {"isError": True, "content": [{"type": "text", "text": "unknown tool"}]}
+        try:
+            out = save(str((params.get("arguments") or {}).get("message_id", "")))
+            return {"content": [{"type": "text", "text": json.dumps(out, ensure_ascii=False)}]}
+        except Exception as e:
+            return {"isError": True, "content": [{"type": "text", "text": str(e)}]}
+    if method == "ping":
+        return {}
+    raise LookupError(method)
+
+
+for line in sys.stdin:
+    try:
+        msg = json.loads(line)
+    except ValueError:
+        continue
+    if "id" not in msg:  # a notification
+        continue
+    try:
+        reply = {"jsonrpc": "2.0", "id": msg["id"], "result": handle(msg)}
+    except LookupError as e:
+        reply = {"jsonrpc": "2.0", "id": msg["id"], "error": {"code": -32601, "message": f"no method {e}"}}
+    print(json.dumps(reply), flush=True)
