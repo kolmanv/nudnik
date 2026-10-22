@@ -7,7 +7,7 @@ N=$(cd "$(dirname "$0")/.." && pwd); C=~/.config/nudnik; O=$C/owner.env; cd "$N"
   install -m 600 /dev/null $C/telegram.env; echo "Created $C: fill in owner.env, mcp.json and telegram.env, then run init again."; exit 0; }
 source $O
 # The only tools a scheduled run gets: files in this folder + read-only WhatsApp (+ read-only mail when configured).
-TOOLS="Read Write Edit Glob Grep mcp__wa__get_status mcp__wa__list_chats mcp__wa__get_messages mcp__wa__search_messages ${MAIL_TOOLS:-}"
+TOOLS="Read Write Edit Glob Grep mcp__wa__get_status mcp__wa__list_chats mcp__wa__get_messages mcp__wa__search_messages mcp__wa__list_media mcp__wa__get_media ${MAIL_TOOLS:-}"
 run() {   # run <prompt> [model]; on failure the error goes to the journal
   local o; o=$(claude -p "$1" --mcp-config $C/mcp.json --strict-mcp-config --allowedTools "$TOOLS" \
     --disallowedTools "Bash WebFetch WebSearch Task" --output-format json ${2:+--model "$2"} 2>&1) \
