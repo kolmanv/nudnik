@@ -2,6 +2,7 @@
 briefing/
 tasks/
 state/
+reminders/
 TASKS.md
 ARCHIVE.md
 *.env

@@ -28,7 +28,7 @@ rows() {   # rows open|closed: one sortable line per task
     if [ $k = open ]; then printf '%s %s\t| %s | %s | %s | %s | %s | %s |\n' "$(g pri)" "$(g since)" "$(g pri)" "${d#tasks/}" \
       "$(g status)" "$(g since)" "$(g due)" "$(g title)"
     else printf '%s\t| %s | %s | %s |\n' "$(g closed)" "$(g closed)" "${d#tasks/}" "$(g title)"; fi; done; }
-mkdir -p briefing tasks state
+mkdir -p briefing tasks state reminders
 case "${1:-}" in
   init)   # systemd user units: the daily briefing (Persistent: a run missed while off runs at boot), the Telegram
           # chat session, and a weekly chat restart that picks up Claude updates (--continue keeps the conversation)
@@ -40,8 +40,11 @@ case "${1:-}" in
     printf '[Service]\nType=oneshot\nRemainAfterExit=yes\nEnvironment=%s\nExecStart=%s/bin/nudnik chat\nExecStop=/usr/bin/tmux kill-session -t chat\n[Install]\nWantedBy=default.target\n' "$P" "$N" > $u/nudnik-chat.service
     printf '[Service]\nType=oneshot\nExecStart=/usr/bin/systemctl --user restart nudnik-chat.service\n' > $u/nudnik-chat-restart.service
     printf '[Timer]\nOnCalendar=Sun *-*-* 04:30 %s\n[Install]\nWantedBy=timers.target\n' "$TZ_NAME" > $u/nudnik-chat-restart.timer
+    printf '[Service]\nType=oneshot\nEnvironment=%s\nExecStart=%s/bin/nudnik due\n' "$P" "$N" > $u/nudnik-due.service
+    printf '[Timer]\nOnCalendar=*:*:05\n[Install]\nWantedBy=timers.target\n' > $u/nudnik-due.timer
     systemctl --user daemon-reload && systemctl --user enable --now nudnik.timer
-    if [ -s ~/.claude/channels/telegram/access.json ]; then systemctl --user enable --now nudnik-chat.service nudnik-chat-restart.timer
+    if [ -s ~/.claude/channels/telegram/access.json ]; then
+      systemctl --user enable --now nudnik-chat.service nudnik-chat-restart.timer nudnik-due.timer
     else echo "Telegram chat not set up yet (see README): nudnik-chat.service not started."; fi
     systemctl --user list-timers 'nudnik*' ;;
   chat)   # the Telegram conversation in tmux "chat". It runs in chat/ so --continue resumes the chat, never a briefing run.
@@ -49,6 +52,17 @@ case "${1:-}" in
     c=1; ls ~/.claude/projects/*-nudnik-chat/*.jsonl >/dev/null 2>&1 || c=
     tmux new-session -d -s chat -x 200 -y 50 -c "$N/chat" "claude ${c:+--continue} --permission-mode dontAsk \
       --settings $N/chat/settings.json --add-dir $N --mcp-config $C/mcp.json --channels plugin:telegram@claude-plugins-official" ;;
+  due)   # every minute: hand reminders that are due to the chat session. The chat writes them to
+         # reminders/scheduled.tsv as "YYYY-MM-DD HH:MM<TAB>prompt"; sent lines move to reminders/done.tsv.
+    f=reminders/scheduled.tsv; [ -s $f ] && tmux has-session -t chat 2>/dev/null || exit 0
+    now=$(date '+%F %H:%M'); keep=$(mktemp)
+    while IFS=$'\t' read -r when prompt; do
+      if [ -n "$prompt" ] && [[ ! "$when" > "$now" ]]; then
+        tmux send-keys -t chat -l "[reminder due $when] $prompt" && tmux send-keys -t chat Enter
+        printf '%s\t%s\t%s\n' "$when" "$prompt" "sent $(date '+%F %H:%M')" >> reminders/done.tsv
+      else printf '%s\t%s\n' "$when" "$prompt" >> "$keep"; fi
+    done < $f
+    mv "$keep" $f ;;
   briefing)
     d=$(date +%F); last=$(ls briefing | grep -v "^$d" | tail -1 || true); last=${last%.md}
     run "$(cat prompts/briefing.md)
