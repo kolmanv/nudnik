@@ -7,10 +7,6 @@
         "CF-Access-Client-Id": "<service token id>",
         "CF-Access-Client-Secret": "<service token secret>"
       }
-    },
-    "files": {
-      "type": "stdio",
-      "command": "/home/<you>/nudnik/bin/nudnik-files"
     }
   }
 }
