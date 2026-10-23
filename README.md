@@ -62,3 +62,11 @@ If the run fails, a one-line "briefing failed" message is sent instead, so silen
 - Outputs (git-ignored): `briefing/`, `tasks/<area>/<task>/task.md`, `TASKS.md`, `ARCHIVE.md`, `state/`
 
 Inspired by the structure of an org-work assistant: tasks as files, aging, close only with evidence, no side effects.
+
+## Privacy
+
+nudnik is a personal assistant that each owner runs on their own server for themselves. When the owner connects
+Google (Gmail, Drive, Sheets, Calendar), access is read-only and is used only to answer the owner and to write the
+owner's own briefings and task lists. Data read from Google stays on the owner's server and in the owner's Claude
+sessions; it is not sold, shared with anyone else or used for advertising. The owner can revoke access at any time at
+https://myaccount.google.com/permissions.
