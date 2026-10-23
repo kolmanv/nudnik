@@ -18,6 +18,28 @@
       "mcp__wa__get_media",
       "mcp__wa__request_media",
       "mcp__wa__get_file",
+      "mcp__google__check_drive_file_public_access",
+      "mcp__google__get_drive_file_content",
+      "mcp__google__get_drive_file_download_url",
+      "mcp__google__get_drive_file_permissions",
+      "mcp__google__get_drive_shareable_link",
+      "mcp__google__get_events",
+      "mcp__google__get_gmail_attachment_content",
+      "mcp__google__get_gmail_message_content",
+      "mcp__google__get_gmail_messages_content_batch",
+      "mcp__google__get_gmail_thread_content",
+      "mcp__google__get_gmail_threads_content_batch",
+      "mcp__google__get_spreadsheet_info",
+      "mcp__google__list_calendars",
+      "mcp__google__list_drive_items",
+      "mcp__google__list_gmail_labels",
+      "mcp__google__list_sheet_tables",
+      "mcp__google__list_spreadsheet_comments",
+      "mcp__google__list_spreadsheets",
+      "mcp__google__query_freebusy",
+      "mcp__google__read_sheet_values",
+      "mcp__google__search_drive_files",
+      "mcp__google__search_gmail_messages",
       "mcp__plugin_telegram_telegram__reply",
       "mcp__plugin_telegram_telegram__react",
       "mcp__plugin_telegram_telegram__edit_message",
@@ -34,7 +56,8 @@
       "Read(~/.claude/.credentials.json)",
       "mcp__wa__get_new_messages",
       "CronCreate",
-      "CronDelete"
+      "CronDelete",
+      "mcp__google__start_google_auth"
     ]
   }
 }

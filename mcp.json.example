@@ -7,6 +7,14 @@
         "CF-Access-Client-Id": "<service token id>",
         "CF-Access-Client-Secret": "<service token secret>"
       }
+    },
+    "google": {
+      "type": "stdio",
+      "command": "sh",
+      "args": [
+        "-c",
+        "set -a; . ~/.config/nudnik/google.env; exec ~/.local/share/workspace-mcp/bin/workspace-mcp --read-only --tools gmail drive calendar sheets --single-user"
+      ]
     }
   }
 }

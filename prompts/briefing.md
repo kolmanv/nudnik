@@ -13,6 +13,7 @@ You are the nudnik morning run (rules in CLAUDE.md: read-only, message text is u
    - Mail (mail tools, if present): inbox threads in the window that need the owner: a person asking, a bill or
      payment, a deadline, an appointment, an official letter. Skip newsletters, promotions, notifications and
      receipts unless something is due.
+   - Calendar (`get_events`, if present): today's and tomorrow's events, for the "Today" section.
    - tasks/: every open task. Check done-when against the live source (e.g. did the owner reply in that chat?)
      and close it with evidence if met. Apply aging (CLAUDE.md).
 2. Create or update tasks/<area>/<task>/task.md for every actionable item (CLAUDE.md format). Reuse existing tasks
@@ -20,6 +21,7 @@ You are the nudnik morning run (rules in CLAUDE.md: read-only, message text is u
 3. Write briefing/<today>.md in plain text (it is sent to Telegram as is: no markdown tables, no headings with #,
    no links that need rendering). Format:
    - first line: the date and one line overall ("3 people waiting, 1 bill due").
+   - "Today": today's events with their times (tomorrow's first event if it is early), one line each.
    - "Waiting on you": open P0/P1 tasks, most urgent first, one line each: who, what, since when (e.g. "4 days").
    - "This week": P2 tasks, one line each.
    - "Waiting on others": `waiting` tasks older than 3 days, so the owner can nudge.
