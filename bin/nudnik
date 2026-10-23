@@ -50,7 +50,8 @@ case "${1:-}" in
   chat)   # the Telegram conversation in tmux "chat". It runs in chat/ so --continue resumes the chat, never a briefing run.
     tmux has-session -t chat 2>/dev/null && { echo "already running"; exit 0; }
     c=1; ls ~/.claude/projects/*-nudnik-chat/*.jsonl >/dev/null 2>&1 || c=
-    tmux new-session -d -s chat -x 200 -y 50 -c "$N/chat" "claude ${c:+--continue} --permission-mode dontAsk \
+    # default mode: tools in chat/settings.json "ask" (Google sends, shares, events) go to Telegram as Allow/Deny
+    tmux new-session -d -s chat -x 200 -y 50 -c "$N/chat" "claude ${c:+--continue} --permission-mode default \
       --settings $N/chat/settings.json --add-dir $N --mcp-config $C/mcp.json --channels plugin:telegram@claude-plugins-official" ;;
   due)   # every minute: hand reminders that are due to the chat session. The chat writes them to
          # reminders/scheduled.tsv as "YYYY-MM-DD HH:MM<TAB>prompt"; sent lines move to reminders/done.tsv.

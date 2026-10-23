@@ -13,7 +13,7 @@
       "command": "sh",
       "args": [
         "-c",
-        "set -a; . ~/.config/nudnik/google.env; exec ~/.local/share/workspace-mcp/bin/workspace-mcp --read-only --tools gmail drive calendar sheets --single-user"
+        "set -a; . ~/.config/nudnik/google.env; exec ~/.local/share/workspace-mcp/bin/workspace-mcp --permissions gmail:send drive:full calendar:full sheets:full --single-user"
       ]
     }
   }

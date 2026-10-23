@@ -15,11 +15,12 @@ don't depend on the model behaving:
 
 | Layer | What it does |
 |---|---|
-| Read-only services | The WhatsApp gateway has no send tools; Google (Gmail, Drive, Sheets, Calendar) is authorised with read-only scopes only, and its write tools are not loaded |
+| Read-only where it reads strangers | The WhatsApp gateway has no send tools; the morning briefing gets read tools only |
+| Google writes ask you | In the chat, sending mail, events, sharing and overwriting files show a Telegram Allow/Deny prompt (`ask` in `chat/settings.json`); Gmail is authorised without settings or permanent delete |
 | A fixed tool list | Scheduled runs get only file tools and the read tools listed in `bin/nudnik`; no shell, no web |
 | No account connectors | `ENABLE_CLAUDEAI_MCP_SERVERS=false` and `--strict-mcp-config`: only the servers in your own `mcp.json` |
 | Fixed recipient | Telegram sending is a `curl` in the script, to the chat id in your config; Claude can't choose a recipient |
-| Chat limits | The chat session runs in `dontAsk` mode: tools not listed in `chat/settings.json` are refused, no prompts. It can read this folder, edit tasks, read WhatsApp and reply to you |
+| Chat limits | Tools allowed in `chat/settings.json` run; denied ones (shell, web, your config) never run; anything else asks you on Telegram. It can read this folder, edit tasks, read WhatsApp and Google, and reply to you |
 | One Telegram user | The plugin's allowlist drops messages from anyone else, and replies only go to allowed chats |
 | Its own machine | Run it in its own container or VM with no access to your home network |
 
@@ -41,9 +42,10 @@ Message and mail text is treated as data, never as instructions (see `CLAUDE.md`
    - `~/.claude/channels/telegram/access.json`:
      `{"dmPolicy": "allowlist", "allowFrom": ["<your Telegram user id>"], "groups": {}, "pending": {}}`
    Then `bin/nudnik init` once more starts the chat session (tmux `chat`).
-5. Google (optional, read-only): [workspace-mcp](https://github.com/taylorwilsdon/google_workspace_mcp) in a venv at
+5. Google (optional): [workspace-mcp](https://github.com/taylorwilsdon/google_workspace_mcp) in a venv at
    `~/.local/share/workspace-mcp` (`pip install workspace-mcp==2.1.2`), started by Claude over stdio with
-   `--read-only` (read-only scopes, no write tools). Your own OAuth client (Google Cloud project with the Gmail,
+   `--permissions gmail:send drive:full calendar:full sheets:full` (use `--read-only --tools gmail drive calendar
+   sheets` for read-only). Your own OAuth client (Google Cloud project with the Gmail,
    Drive, Sheets and Calendar APIs; Web client, redirect `http://localhost:8000/oauth2callback`; app published so
    the sign-in lasts) in `~/.config/nudnik/google.env` (`GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`,
    `USER_GOOGLE_EMAIL`, `WORKSPACE_MCP_CREDENTIALS_DIR`). Sign in once by calling its `start_google_auth` tool and
