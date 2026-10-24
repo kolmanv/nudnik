@@ -89,12 +89,11 @@
       "mcp__google__set_drive_file_permissions",
       "mcp__google__update_drive_file",
       "mcp__google__manage_sheet_tab",
-      "mcp__google__manage_spreadsheet_comment"
+      "mcp__google__manage_spreadsheet_comment",
+      "WebSearch"
     ],
     "deny": [
       "Bash",
-      "WebFetch",
-      "WebSearch",
       "Task",
       "Agent",
       "Read(~/.config/**)",
@@ -107,7 +106,8 @@
       "mcp__google__debug_docs_runtime_info"
     ],
     "ask": [
-      "mcp__google__send_gmail_message"
+      "mcp__google__send_gmail_message",
+      "WebFetch"
     ]
   }
 }

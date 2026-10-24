@@ -20,7 +20,7 @@ don't depend on the model behaving:
 | A fixed tool list | Scheduled runs get only file tools and the read tools listed in `bin/nudnik`; no shell, no web |
 | No account connectors | `ENABLE_CLAUDEAI_MCP_SERVERS=false` and `--strict-mcp-config`: only the servers in your own `mcp.json` |
 | Fixed recipient | Telegram sending is a `curl` in the script, to the chat id in your config; Claude can't choose a recipient |
-| Chat limits | Tools allowed in `chat/settings.json` run; denied ones (shell, web, your config) never run; anything else asks you on Telegram. It can read this folder, edit tasks, read WhatsApp and Google, and reply to you |
+| Chat limits | Tools allowed in `chat/settings.json` run; denied ones (shell, your config) never run; anything else asks you on Telegram. It can read this folder, edit tasks, read WhatsApp and Google, search the web (opening a page asks you), and reply to you |
 | One Telegram user | The plugin's allowlist drops messages from anyone else, and replies only go to allowed chats |
 | Its own machine | Run it in its own container or VM with no access to your home network |
 
