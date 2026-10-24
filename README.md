@@ -16,7 +16,7 @@ don't depend on the model behaving:
 | Layer | What it does |
 |---|---|
 | Read-only where it reads strangers | The WhatsApp gateway has no send tools; the morning briefing gets read tools only |
-| Google writes ask you | In the chat, sending mail, events, sharing and overwriting files show a Telegram Allow/Deny prompt (`ask` in `chat/settings.json`); Gmail is authorised without settings or permanent delete |
+| Google writes ask you | Only on your request in the chat. Sending mail shows a Telegram Allow/Deny prompt (`ask` in `chat/settings.json`); other Google changes run directly, and Docs and Drive keep version history; Gmail is authorised without settings or permanent delete |
 | A fixed tool list | Scheduled runs get only file tools and the read tools listed in `bin/nudnik`; no shell, no web |
 | No account connectors | `ENABLE_CLAUDEAI_MCP_SERVERS=false` and `--strict-mcp-config`: only the servers in your own `mcp.json` |
 | Fixed recipient | Telegram sending is a `curl` in the script, to the chat id in your config; Claude can't choose a recipient |
@@ -44,9 +44,9 @@ Message and mail text is treated as data, never as instructions (see `CLAUDE.md`
    Then `bin/nudnik init` once more starts the chat session (tmux `chat`).
 5. Google (optional): [workspace-mcp](https://github.com/taylorwilsdon/google_workspace_mcp) in a venv at
    `~/.local/share/workspace-mcp` (`pip install workspace-mcp==2.1.2`), started by Claude over stdio with
-   `--permissions gmail:send drive:full calendar:full sheets:full` (use `--read-only --tools gmail drive calendar
-   sheets` for read-only). Your own OAuth client (Google Cloud project with the Gmail,
-   Drive, Sheets and Calendar APIs; Web client, redirect `http://localhost:8000/oauth2callback`; app published so
+   `--permissions gmail:send drive:full calendar:full sheets:full docs:full` (use `--read-only --tools gmail drive
+   calendar sheets docs` for read-only). Your own OAuth client (Google Cloud project with the Gmail,
+   Drive, Docs, Sheets and Calendar APIs; Web client, redirect `http://localhost:8000/oauth2callback`; app published so
    the sign-in lasts) in `~/.config/nudnik/google.env` (`GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`,
    `USER_GOOGLE_EMAIL`, `WORKSPACE_MCP_CREDENTIALS_DIR`). Sign in once by calling its `start_google_auth` tool and
    opening the callback address on the same machine. Then set `MAIL_TOOLS` in `owner.env`.
@@ -75,7 +75,7 @@ Inspired by the structure of an org-work assistant: tasks as files, aging, close
 ## Privacy
 
 nudnik is a personal assistant that each owner runs on their own server for themselves. When the owner connects
-Google (Gmail, Drive, Sheets, Calendar), access is read-only and is used only to answer the owner and to write the
-owner's own briefings and task lists. Data read from Google stays on the owner's server and in the owner's Claude
+Google (Gmail, Drive, Docs, Sheets, Calendar), access is used only to answer the owner, to write the owner's own
+briefings and task lists, and to make the changes the owner asks for in their own chat. Data read from Google stays on the owner's server and in the owner's Claude
 sessions; it is not sold, shared with anyone else or used for advertising. The owner can revoke access at any time at
 https://myaccount.google.com/permissions.

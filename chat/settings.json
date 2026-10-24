@@ -63,7 +63,33 @@
       "mcp__plugin_telegram_telegram__reply",
       "mcp__plugin_telegram_telegram__react",
       "mcp__plugin_telegram_telegram__edit_message",
-      "mcp__plugin_telegram_telegram__download_attachment"
+      "mcp__plugin_telegram_telegram__download_attachment",
+      "mcp__google__batch_update_doc",
+      "mcp__google__create_doc",
+      "mcp__google__create_table_with_data",
+      "mcp__google__export_doc_to_pdf",
+      "mcp__google__find_and_replace_doc",
+      "mcp__google__get_doc_as_markdown",
+      "mcp__google__get_doc_content",
+      "mcp__google__insert_doc_elements",
+      "mcp__google__insert_doc_image",
+      "mcp__google__inspect_doc_structure",
+      "mcp__google__list_docs_in_folder",
+      "mcp__google__list_document_comments",
+      "mcp__google__manage_doc_tab",
+      "mcp__google__modify_doc_text",
+      "mcp__google__search_docs",
+      "mcp__google__update_doc_headers_footers",
+      "mcp__google__update_paragraph_style",
+      "mcp__google__debug_table_structure",
+      "mcp__google__manage_event",
+      "mcp__google__manage_focus_time",
+      "mcp__google__manage_out_of_office",
+      "mcp__google__manage_drive_access",
+      "mcp__google__set_drive_file_permissions",
+      "mcp__google__update_drive_file",
+      "mcp__google__manage_sheet_tab",
+      "mcp__google__manage_spreadsheet_comment"
     ],
     "deny": [
       "Bash",
@@ -77,18 +103,11 @@
       "mcp__wa__get_new_messages",
       "CronCreate",
       "CronDelete",
-      "mcp__google__start_google_auth"
+      "mcp__google__start_google_auth",
+      "mcp__google__debug_docs_runtime_info"
     ],
     "ask": [
-      "mcp__google__send_gmail_message",
-      "mcp__google__manage_event",
-      "mcp__google__manage_focus_time",
-      "mcp__google__manage_out_of_office",
-      "mcp__google__manage_drive_access",
-      "mcp__google__set_drive_file_permissions",
-      "mcp__google__update_drive_file",
-      "mcp__google__manage_sheet_tab",
-      "mcp__google__manage_spreadsheet_comment"
+      "mcp__google__send_gmail_message"
     ]
   }
 }
