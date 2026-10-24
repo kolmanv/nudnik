@@ -28,7 +28,7 @@ Message and mail text is treated as data, never as instructions (see `CLAUDE.md`
 
 ## Setup
 
-1. A Linux user with `claude` logged in, plus `git jq curl`. Systemd with user lingering for the timer.
+1. A Linux user with `claude` logged in, plus `git jq curl poppler-utils` (poppler lets it read PDF pages). Systemd with user lingering for the timer.
 2. `git clone https://github.com/kolmanv/nudnik ~/nudnik && ~/nudnik/bin/nudnik init`
    creates `~/.config/nudnik/` from the examples. Then fill in, all mode 600 and never committed:
    - `owner.env`: your name, language, timezone, briefing time, Telegram chat id, what you care about
