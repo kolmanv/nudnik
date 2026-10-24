@@ -1,20 +1,6 @@
 {
   "mcpServers": {
-    "wa": {
-      "type": "http",
-      "url": "https://wa.example.com/mcp",
-      "headers": {
-        "CF-Access-Client-Id": "<service token id>",
-        "CF-Access-Client-Secret": "<service token secret>"
-      }
-    },
-    "google": {
-      "type": "stdio",
-      "command": "sh",
-      "args": [
-        "-c",
-        "set -a; . ~/.config/nudnik/google.env; exec ~/.local/share/workspace-mcp/bin/workspace-mcp --permissions gmail:send drive:full calendar:full sheets:full docs:full --single-user"
-      ]
-    }
+    "wa": {"type": "http", "url": "http://127.0.0.1:8770/mcp"},
+    "google": {"type": "stdio", "command": "sudo", "args": ["-n", "-u", "nudnik-google", "/usr/local/bin/nudnik-google-mcp"]}
   }
 }

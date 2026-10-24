@@ -33,7 +33,7 @@ Message and mail text is treated as data, never as instructions (see `CLAUDE.md`
    creates `~/.config/nudnik/` from the examples. Then fill in, all mode 600 and never committed:
    - `owner.env`: your name, language, timezone, briefing time, Telegram chat id, what you care about
    - `telegram.env`: `TELEGRAM_BOT_TOKEN=...` from @BotFather
-   - `mcp.json`: the read-only MCP servers (see `mcp.json.example`)
+   - `mcp.json`: the MCP servers (see `mcp.json.example` and step 5)
 3. Run `bin/nudnik init` again to install the timer, then `NOTIFY=0 bin/nudnik briefing` to try it without sending.
 4. To reply to nudnik in Telegram: `claude plugin install telegram@claude-plugins-official`, then
    `claude plugin disable telegram@claude-plugins-official` (it is enabled only for the chat session, by
@@ -42,14 +42,23 @@ Message and mail text is treated as data, never as instructions (see `CLAUDE.md`
    - `~/.claude/channels/telegram/access.json`:
      `{"dmPolicy": "allowlist", "allowFrom": ["<your Telegram user id>"], "groups": {}, "pending": {}}`
    Then `bin/nudnik init` once more starts the chat session (tmux `chat`).
-5. Google (optional): [workspace-mcp](https://github.com/taylorwilsdon/google_workspace_mcp) in a venv at
-   `~/.local/share/workspace-mcp` (`pip install workspace-mcp==2.1.2`), started by Claude over stdio with
-   `--permissions gmail:send drive:full calendar:full sheets:full docs:full` (use `--read-only --tools gmail drive
-   calendar sheets docs` for read-only). Your own OAuth client (Google Cloud project with the Gmail,
-   Drive, Docs, Sheets and Calendar APIs; Web client, redirect `http://localhost:8000/oauth2callback`; app published so
-   the sign-in lasts) in `~/.config/nudnik/google.env` (`GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`,
-   `USER_GOOGLE_EMAIL`, `WORKSPACE_MCP_CREDENTIALS_DIR`). Sign in once by calling its `start_google_auth` tool and
-   opening the callback address on the same machine. Then set `MAIL_TOOLS` in `owner.env`.
+5. Keys out of reach (recommended, as root). The assistant user should never be able to read a key, so a tricked
+   session can't leak one. Files in `setup/`:
+   - WhatsApp: [wa-gateway](https://github.com/kolmanv/wa-gateway) through a root-only nginx proxy on 127.0.0.1
+     that adds the Cloudflare Access token (`wa-proxy.nginx.example`); `mcp.json` points at the proxy.
+   - Google: [workspace-mcp](https://github.com/taylorwilsdon/google_workspace_mcp) in a root-owned venv
+     (`python3 -m venv /opt/workspace-mcp && /opt/workspace-mcp/bin/pip install workspace-mcp==2.1.2`), run as a
+     system user `nudnik-google` (home `/var/lib/nudnik-google`, mode 711) through `nudnik-google-mcp` and the
+     sudo rule in `sudoers.nudnik-google`. Its keys live in `/etc/nudnik-google/google.env` (mode 600:
+     `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `USER_GOOGLE_EMAIL`,
+     `WORKSPACE_MCP_CREDENTIALS_DIR=/etc/nudnik-google/credentials`,
+     `WORKSPACE_ATTACHMENT_DIR=/var/lib/nudnik-google/attachments`); the attachments folder is
+     `nudnik-google:assistant` mode 2750 so the chat can attach files, and `nudnik-google-patch` makes saved files
+     group-readable (re-run it after upgrades). Your own OAuth client: Google Cloud project with the Gmail, Drive,
+     Docs, Sheets and Calendar APIs, Web client, redirect `http://localhost:8000/oauth2callback`, app published so the
+     sign-in lasts. Sign in once as `nudnik-google` by calling `start_google_auth` and opening the callback address
+     on the same machine (the chat may never call it). For read-only, use `--read-only --tools gmail drive calendar
+     sheets docs` in the launcher. Then set `MAIL_TOOLS` in `owner.env`.
 
 ## Use
 

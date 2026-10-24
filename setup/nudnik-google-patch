@@ -1,0 +1,5 @@
+#!/bin/sh
+# workspace-mcp saves attachments and Drive downloads as 0600. nudnik (group assistant) must read them to attach them
+# on Telegram, so make them 0640 in the root-owned copy. Re-run after every upgrade of /opt/workspace-mcp.
+F=/opt/workspace-mcp/lib/python3.13/site-packages/core/attachment_storage.py
+sed -i -e "s/0o600/0o640/g" -e "s/mode=0o700/mode=0o750/" "$F" && grep -c "0o640" "$F"

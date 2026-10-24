@@ -1,0 +1,8 @@
+#!/bin/sh
+# Google Workspace MCP for nudnik over stdio, run as nudnik-google through sudo. The keys in /etc/nudnik-google
+# are unreadable by the assistant user; attachments land in a folder it can read (group assistant).
+umask 027
+export HOME=/var/lib/nudnik-google
+set -a; . /etc/nudnik-google/google.env; set +a
+cd "$HOME"
+exec /opt/workspace-mcp/bin/workspace-mcp --permissions gmail:send drive:full calendar:full sheets:full docs:full --single-user

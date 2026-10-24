@@ -1,0 +1,4 @@
+# /etc/sudoers.d/nudnik-google (mode 440): the assistant user may start the Google MCP launcher as nudnik-google,
+# with no arguments, and nothing else.
+Defaults!/usr/local/bin/nudnik-google-mcp !use_pty
+assistant ALL=(nudnik-google) NOPASSWD: /usr/local/bin/nudnik-google-mcp ""
