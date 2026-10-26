@@ -1,5 +1,50 @@
 #!/bin/sh
-# workspace-mcp saves attachments and Drive downloads as 0600. nudnik (group assistant) must read them to attach them
-# on Telegram, so make them 0640 in the root-owned copy. Re-run after every upgrade of /opt/workspace-mcp.
-F=/opt/workspace-mcp/lib/python3.13/site-packages/core/attachment_storage.py
-sed -i -e "s/0o600/0o640/g" -e "s/mode=0o700/mode=0o750/" "$F" && grep -c "0o640" "$F"
+# Local fixes to the root-owned copy of workspace-mcp. Re-run after every upgrade of /opt/workspace-mcp: it is safe to
+# run twice, and it stops with an error if an upgrade changed the code it patches.
+# 1. Attachments and Drive downloads are saved as 0600. nudnik (group assistant) must read them to attach them on
+#    Telegram, so make them 0640.
+# 2. get_drive_file_download_url exports Docs, Sheets and Slides only. Add Google Drawings: PNG by default, or
+#    export_format 'pdf', 'jpg' or 'svg'.
+set -e
+D=/opt/workspace-mcp/lib/python3.13/site-packages
+F=$D/core/attachment_storage.py
+sed -i -e "s/0o600/0o640/g" -e "s/mode=0o700/mode=0o750/" "$F"
+grep -q "0o640" "$F" || { echo "patch 1 failed: $F changed" >&2; exit 1; }
+
+python3 - "$D/gdrive/drive_tools.py" <<'EOF'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+MARK = "# nudnik-google-patch: drawings"
+if MARK in s:
+    print("drawings: already patched"); sys.exit(0)
+edits = [
+    ("    - Google Slides -> PDF (default) or PPTX if export_format='pptx'\n",
+     "    - Google Slides -> PDF (default) or PPTX if export_format='pptx'\n"
+     "    - Google Drawings -> PNG (default), or PDF, JPG or SVG if export_format='pdf', 'jpg' or 'svg'\n"),
+    ("Options: 'pdf', 'docx', 'xlsx', 'csv', 'pptx'.",
+     "Options: 'pdf', 'docx', 'xlsx', 'csv', 'pptx', 'png', 'jpg', 'svg'."),
+    ("\n    # Stateless mode has no attachment storage to hand out a URL from",
+     """
+    elif mime_type == "application/vnd.google-apps.drawing":  # nudnik-google-patch: drawings
+        ext, export_mime_type = {
+            "pdf": ("pdf", "application/pdf"),
+            "jpg": ("jpg", "image/jpeg"),
+            "jpeg": ("jpg", "image/jpeg"),
+            "svg": ("svg", "image/svg+xml"),
+        }.get((export_format or "").lower(), ("png", "image/png"))
+        output_mime_type = export_mime_type
+        if not output_filename.endswith(f".{ext}"):
+            output_filename = f"{Path(output_filename).stem}.{ext}"
+
+    # Stateless mode has no attachment storage to hand out a URL from"""),
+]
+for old, new in edits:
+    if s.count(old) != 1:
+        sys.exit(f"patch 2 failed: {p} changed (anchor not found once: {old.strip()[:50]!r})")
+    s = s.replace(old, new)
+open(p, "w").write(s)
+print("drawings: patched")
+EOF
+python3 -m py_compile "$D/gdrive/drive_tools.py"
+echo "ok"
