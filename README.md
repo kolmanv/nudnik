@@ -54,7 +54,7 @@ Message and mail text is treated as data, never as instructions (see `CLAUDE.md`
      `WORKSPACE_MCP_CREDENTIALS_DIR=/etc/nudnik-google/credentials`,
      `WORKSPACE_ATTACHMENT_DIR=/var/lib/nudnik-google/attachments`); the attachments folder is
      `nudnik-google:assistant` mode 2750 so the chat can attach files, and `nudnik-google-patch` makes saved files
-     group-readable (re-run it after upgrades). Your own OAuth client: Google Cloud project with the Gmail, Drive,
+     group-readable and lets Google Drawings download as images (re-run it after upgrades). Your own OAuth client: Google Cloud project with the Gmail, Drive,
      Docs, Sheets and Calendar APIs, Web client, redirect `http://localhost:8000/oauth2callback`, app published so the
      sign-in lasts. Sign in once as `nudnik-google` by calling `start_google_auth` and opening the callback address
      on the same machine (the chat may never call it). For read-only, use `--read-only --tools gmail drive calendar
