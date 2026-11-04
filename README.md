@@ -63,6 +63,11 @@ Message and mail text is treated as data, never as instructions (see `CLAUDE.md`
      that adds nudnik's katzran token (`katzran-proxy.nginx.example`); `bin/katzran-mcp` is the MCP server
      (`mcp.json.example`). It only sends files saved from Telegram, WhatsApp or Google, and saves each transcript under
      `transcripts/`. Let the container reach katzran's address and port, and nothing else on your network.
+   - Zoom: Zoom's Meetings MCP server through a root-only nginx proxy on 127.0.0.1 (`zoom-proxy.nginx.example`)
+     that adds a token kept fresh by `nudnik-zoom-token` (`/usr/local/sbin`, with its `.service` and `.timer`). Your own
+     General app (user-managed) in the Zoom App Marketplace, with the scopes the server lists and an https redirect on
+     a domain you own (Zoom refuses localhost and IP addresses); keys in `/etc/nudnik-zoom/zoom.env`. Sign in once
+     with `nudnik-zoom-token auth-url`, then `auth <address>` with the address the browser failed to load.
 
 ## Use
 

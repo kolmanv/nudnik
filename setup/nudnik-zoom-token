@@ -1,0 +1,103 @@
+#!/usr/bin/env python3
+"""Keeps a Zoom OAuth token for the local Zoom MCP proxy, so the assistant user never holds a Zoom key.
+
+Run as root. Keys live in /etc/nudnik-zoom (mode 700): zoom.env (ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET, ZOOM_REDIRECT,
+optional ZOOM_MCP_URL), token.json (written here). The access token goes into /etc/nginx/nudnik-zoom-auth.conf (mode 600),
+which the proxy in zoom-proxy.nginx.example includes; nginx is reloaded after each change.
+
+  nudnik-zoom-token auth-url         print the sign-in link (ZOOM_REDIRECT must be in the Zoom app's allow list)
+  nudnik-zoom-token auth <address>   finish sign-in with the address the browser was sent to (it fails to load)
+  nudnik-zoom-token refresh          renew the token if it expires within 20 minutes (run every 10 minutes)
+  nudnik-zoom-token status           when the token expires; never prints it
+
+ZOOM_REDIRECT: Zoom refuses localhost and IP addresses, so use an https address on a domain you own, e.g.
+https://zoom-callback.example.com/callback. Nothing needs to answer there: the browser fails to load it, and you copy
+the address from the address bar. (A name with no DNS record keeps the code from reaching any server.)
+"""
+import base64, hashlib, json, os, secrets, subprocess, sys, time, urllib.error, urllib.parse, urllib.request
+
+DIR = "/etc/nudnik-zoom"
+NGINX_INC = "/etc/nginx/nudnik-zoom-auth.conf"
+SCOPES = ("meeting:write:meeting meeting:read:search meeting:delete:meeting meeting:update:in_meeting_controls "
+          "meeting:update:meeting meeting:read:assets cloud_recording:read:list_user_recordings "
+          "cloud_recording:read:content")
+
+
+def env():
+    vals = {}
+    for line in open(f"{DIR}/zoom.env"):
+        if "=" in line and not line.lstrip().startswith("#"):
+            k, v = line.strip().split("=", 1)
+            vals[k] = v.strip().strip('"')
+    vals.setdefault("ZOOM_MCP_URL", "https://mcp.zoom.us/mcp/meeting/streamable")
+    if not vals.get("ZOOM_REDIRECT", "").startswith("https://"):
+        sys.exit("set ZOOM_REDIRECT=https://... in zoom.env (see the top of this script)")
+    return vals
+
+
+def save(path, data, mode=0o600):
+    tmp = path + ".new"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode)
+    with os.fdopen(fd, "w") as f:
+        f.write(data)
+    os.replace(tmp, path)
+
+
+def token_request(e, form):
+    auth = base64.b64encode(f"{e['ZOOM_CLIENT_ID']}:{e['ZOOM_CLIENT_SECRET']}".encode()).decode()
+    req = urllib.request.Request("https://zoom.us/oauth/token", data=urllib.parse.urlencode(form).encode(),
+                                 headers={"Authorization": f"Basic {auth}",
+                                          "Content-Type": "application/x-www-form-urlencoded"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            t = json.load(r)
+    except urllib.error.HTTPError as err:
+        body = json.loads(err.read() or b"{}")
+        sys.exit(f"Zoom refused: {err.code} {body.get('reason') or body.get('error_description') or body.get('error', '')}")
+    t["expires_at"] = int(time.time()) + int(t.get("expires_in", 3600))
+    save(f"{DIR}/token.json", json.dumps({k: t[k] for k in ("access_token", "refresh_token", "expires_at", "scope")
+                                          if k in t}))
+    save(NGINX_INC, f'proxy_set_header Authorization "Bearer {t["access_token"]}";\n')
+    subprocess.run(["systemctl", "reload", "nginx"], check=True)
+    return t
+
+
+def main():
+    cmd = sys.argv[1] if len(sys.argv) > 1 else "status"
+    e = env()
+    if cmd == "auth-url":
+        verifier = secrets.token_urlsafe(48)
+        state = secrets.token_urlsafe(24)
+        save(f"{DIR}/pending.json", json.dumps({"verifier": verifier, "state": state, "at": int(time.time())}))
+        challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
+        print("https://zoom.us/oauth/authorize?" + urllib.parse.urlencode({
+            "response_type": "code", "client_id": e["ZOOM_CLIENT_ID"], "redirect_uri": e["ZOOM_REDIRECT"], "state": state,
+            "code_challenge": challenge, "code_challenge_method": "S256", "scope": SCOPES,
+            "resource": e["ZOOM_MCP_URL"]}))
+    elif cmd == "auth":
+        q = urllib.parse.parse_qs(urllib.parse.urlparse(sys.argv[2]).query)
+        p = json.load(open(f"{DIR}/pending.json"))
+        if q.get("state", [""])[0] != p["state"]:
+            sys.exit("that address is from another sign-in: run auth-url again")
+        if "code" not in q:
+            sys.exit(f"no code in the address: {q.get('error', ['?'])[0]}")
+        t = token_request(e, {"grant_type": "authorization_code", "code": q["code"][0], "redirect_uri": e["ZOOM_REDIRECT"],
+                              "code_verifier": p["verifier"], "resource": e["ZOOM_MCP_URL"]})
+        os.remove(f"{DIR}/pending.json")
+        print(f"signed in; scopes: {t.get('scope', '?')}")
+    elif cmd == "refresh":
+        t = json.load(open(f"{DIR}/token.json"))
+        if t["expires_at"] - time.time() < 20 * 60:
+            token_request(e, {"grant_type": "refresh_token", "refresh_token": t["refresh_token"]})
+    elif cmd == "status":
+        try:
+            t = json.load(open(f"{DIR}/token.json"))
+            print(f"token expires in {int((t['expires_at'] - time.time()) / 60)} min; scopes: {t.get('scope', '?')}")
+        except FileNotFoundError:
+            print("not signed in: run auth-url")
+    else:
+        sys.exit(__doc__)
+
+
+if __name__ == "__main__":
+    main()

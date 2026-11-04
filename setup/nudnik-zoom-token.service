@@ -1,0 +1,8 @@
+[Unit]
+Description=Renew nudnik's Zoom token for the local Zoom proxy
+After=network-online.target
+OnFailure=nudnik-zoom-token-failed.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/nudnik-zoom-token refresh

@@ -1,0 +1,7 @@
+[Unit]
+Description=Tell the owner on Telegram that the Zoom token could not be renewed
+
+[Service]
+Type=oneshot
+# nudnik's own sender: a fixed message to the owner's chat, no AI involved
+ExecStart=/bin/sh -c 'f=$(mktemp) && echo "Zoom token renewal failed on $(hostname): Zoom tools stop within the hour. Server admin: nudnik-zoom-token status, then sign in again if needed (auth-url)." > $f && chmod 644 $f && runuser -u assistant -- /home/assistant/nudnik/bin/nudnik send $f; rm -f $f'

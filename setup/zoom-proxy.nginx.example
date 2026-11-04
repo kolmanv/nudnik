@@ -1,0 +1,23 @@
+# /etc/nginx/conf.d/zoom-proxy.conf (root, mode 600): local proxy to Zoom's Meetings MCP server. The token comes from
+# /etc/nginx/nudnik-zoom-auth.conf, kept fresh by nudnik-zoom-token (nudnik-zoom-token.timer), so the assistant user
+# reaches Zoom without ever seeing a key. Before the first sign-in, create that file with just a comment.
+server {
+    listen 127.0.0.1:8772;
+    resolver <your DNS servers> ipv6=off valid=300s;  # resolve per request, so nginx starts before DNS is up
+    set $zoom https://mcp.zoom.us;
+    location = /mcp {
+        proxy_pass $zoom/mcp/meeting/streamable;
+        proxy_ssl_server_name on;
+        proxy_ssl_name mcp.zoom.us;
+        proxy_ssl_verify on;
+        proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
+        proxy_set_header Host mcp.zoom.us;
+        include /etc/nginx/nudnik-zoom-auth.conf;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_buffering off;          # MCP answers may stream
+        proxy_read_timeout 300s;
+        client_max_body_size 1m;
+    }
+    location / { return 404; }
+}

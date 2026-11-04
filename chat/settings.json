@@ -20,6 +20,12 @@
       "mcp__wa__get_file",
       "mcp__katzran__transcribe",
       "mcp__katzran__get_transcript",
+      "mcp__zoom__search_meetings",
+      "mcp__zoom__get_meeting_assets",
+      "mcp__zoom__recordings_list",
+      "mcp__zoom__get_recording_resource",
+      "mcp__zoom__meeting_create",
+      "mcp__zoom__meeting_update",
       "mcp__google__check_drive_file_public_access",
       "mcp__google__get_drive_file_content",
       "mcp__google__get_drive_file_download_url",
@@ -109,6 +115,8 @@
     ],
     "ask": [
       "mcp__google__send_gmail_message",
+      "mcp__zoom__meeting_delete",
+      "mcp__zoom__in_meeting_control",
       "WebFetch"
     ]
   }
