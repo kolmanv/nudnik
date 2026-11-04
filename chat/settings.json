@@ -18,6 +18,8 @@
       "mcp__wa__get_media",
       "mcp__wa__request_media",
       "mcp__wa__get_file",
+      "mcp__katzran__transcribe",
+      "mcp__katzran__get_transcript",
       "mcp__google__check_drive_file_public_access",
       "mcp__google__get_drive_file_content",
       "mcp__google__get_drive_file_download_url",

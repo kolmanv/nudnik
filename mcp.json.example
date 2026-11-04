@@ -1,6 +1,7 @@
 {
   "mcpServers": {
     "wa": {"type": "http", "url": "http://127.0.0.1:8770/mcp"},
-    "google": {"type": "stdio", "command": "sudo", "args": ["-n", "-u", "nudnik-google", "/usr/local/bin/nudnik-google-mcp"]}
+    "google": {"type": "stdio", "command": "sudo", "args": ["-n", "-u", "nudnik-google", "/usr/local/bin/nudnik-google-mcp"]},
+    "katzran": {"type": "stdio", "command": "/home/<user>/nudnik/bin/katzran-mcp"}
   }
 }

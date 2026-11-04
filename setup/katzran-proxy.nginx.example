@@ -1,0 +1,17 @@
+# /etc/nginx/conf.d/katzran-proxy.conf (root, mode 600): local proxy to katzran, the speech-to-text service. It adds
+# nudnik's katzran token to every request, so the assistant user transcribes audio without ever seeing the token.
+# The container's firewall must allow this one address and port out (it blocks the home network otherwise).
+server {
+    listen 127.0.0.1:8771;
+    location ~ ^/(jobs(/[A-Za-z0-9_-]+)?|health)$ {
+        proxy_pass http://<katzran address>:9000;
+        proxy_set_header Authorization "Bearer <token>";
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_request_buffering off;  # stream large recordings straight through
+        client_max_body_size 300m;    # katzran's MAX_MB
+        proxy_read_timeout 600s;
+        proxy_send_timeout 600s;
+    }
+    location / { return 404; }
+}

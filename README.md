@@ -59,6 +59,10 @@ Message and mail text is treated as data, never as instructions (see `CLAUDE.md`
      sign-in lasts. Sign in once as `nudnik-google` by calling `start_google_auth` and opening the callback address
      on the same machine (the chat may never call it). For read-only, use `--read-only --tools gmail drive calendar
      sheets docs` in the launcher. Then set `MAIL_TOOLS` in `owner.env`.
+   - Speech to text: [katzran](https://github.com/kolmanv/katzran) through a root-only nginx proxy on 127.0.0.1
+     that adds nudnik's katzran token (`katzran-proxy.nginx.example`); `bin/katzran-mcp` is the MCP server
+     (`mcp.json.example`). It only sends files saved from Telegram, WhatsApp or Google, and saves each transcript under
+     `transcripts/`. Let the container reach katzran's address and port, and nothing else on your network.
 
 ## Use
 
@@ -76,8 +80,9 @@ If the run fails, a one-line "briefing failed" message is sent instead, so silen
 
 - `CLAUDE.md`: the rules every run follows (read-only, untrusted input, task format, priorities, aging)
 - `prompts/briefing.md`: the morning prompt
+- `bin/katzran-mcp`: transcribes audio and video files with katzran
 - `owner.env.example`, `mcp.json.example`: templates for your private config
-- Outputs (git-ignored): `briefing/`, `tasks/<area>/<task>/task.md`, `TASKS.md`, `ARCHIVE.md`, `state/`
+- Outputs (git-ignored): `briefing/`, `tasks/<area>/<task>/task.md`, `TASKS.md`, `ARCHIVE.md`, `state/`, `transcripts/`
 
 Inspired by the structure of an org-work assistant: tasks as files, aging, close only with evidence, no side effects.
 
