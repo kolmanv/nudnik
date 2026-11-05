@@ -68,6 +68,18 @@ Message and mail text is treated as data, never as instructions (see `CLAUDE.md`
      General app (user-managed) in the Zoom App Marketplace, with the scopes the server lists and an https redirect on
      a domain you own (Zoom refuses localhost and IP addresses); keys in `/etc/nudnik-zoom/zoom.env`. Sign in once
      with `nudnik-zoom-token auth-url`, then `auth <address>` with the address the browser failed to load.
+   - Cutting audio and video: `bin/media-mcp` (`cut_audio`) runs ffmpeg (install `ffmpeg`) with fixed arguments on
+     saved files and writes the pieces to `clips/`.
+   - A mailbox with another assistant (e.g. one for work, on another machine and account): a Google Sheet for
+     messages and a Drive folder for shared files, both in a Google account the two share. `setup/nudnik-mailbox`
+     (in `/usr/local/bin`, run as `nudnik-google` like the Google server) holds the key and touches only that Sheet
+     and folder; `bin/mailbox-mcp` is the MCP server. Settings in `/etc/nudnik-google/mailbox.env` (see the top of
+     `nudnik-mailbox`; `MAILBOX_CREDS` can be workspace-mcp's credentials file). `nudnik-mailbox init <folder name>`
+     creates the folder and Sheet and prints the two ids for both sides. Allow it in sudoers
+     (`assistant ALL=(nudnik-google) NOPASSWD: /usr/local/bin/nudnik-mailbox`), set `MAILBOX_CMD` in `owner.env` and
+     run `init` again: a 30-second timer rings the chat when a message arrives. The other side runs its own copy with
+     its own name, prefix and Google key. Rows are plain values (never formulas); a thread stops after 4 messages
+     without the owner.
 
 ## Use
 
@@ -86,8 +98,10 @@ If the run fails, a one-line "briefing failed" message is sent instead, so silen
 - `CLAUDE.md`: the rules every run follows (read-only, untrusted input, task format, priorities, aging)
 - `prompts/briefing.md`: the morning prompt
 - `bin/katzran-mcp`: transcribes audio and video files with katzran
+- `bin/media-mcp`: cuts pieces out of audio and video files (ffmpeg)
+- `bin/mailbox-mcp`, `setup/nudnik-mailbox`: the mailbox with another assistant
 - `owner.env.example`, `mcp.json.example`: templates for your private config
-- Outputs (git-ignored): `briefing/`, `tasks/<area>/<task>/task.md`, `TASKS.md`, `ARCHIVE.md`, `state/`, `transcripts/`
+- Outputs (git-ignored): `briefing/`, `tasks/<area>/<task>/task.md`, `TASKS.md`, `ARCHIVE.md`, `state/`, `transcripts/`, `clips/`
 
 Inspired by the structure of an org-work assistant: tasks as files, aging, close only with evidence, no side effects.
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # nudnik — morning briefing + tasks, read-only (rules: CLAUDE.md)
-# Usage: nudnik init | briefing | status | send <file>
+# Usage: nudnik init | briefing | status | send <file>   (chat, due, mailbox: run by the timers)
 set -euo pipefail
 N=$(cd "$(dirname "$0")/.." && pwd); C=~/.config/nudnik; O=$C/owner.env; cd "$N"
 [ -f $O ] || { mkdir -p -m 700 $C; install -m 600 owner.env.example $O; install -m 600 mcp.json.example $C/mcp.json
@@ -42,9 +42,12 @@ case "${1:-}" in
     printf '[Timer]\nOnCalendar=Sun *-*-* 04:30 %s\n[Install]\nWantedBy=timers.target\n' "$TZ_NAME" > $u/nudnik-chat-restart.timer
     printf '[Service]\nType=oneshot\nEnvironment=%s\nExecStart=%s/bin/nudnik due\n' "$P" "$N" > $u/nudnik-due.service
     printf '[Timer]\nOnCalendar=*:*:05\n[Install]\nWantedBy=timers.target\n' > $u/nudnik-due.timer
+    printf '[Service]\nType=oneshot\nEnvironment=%s\nExecStart=%s/bin/nudnik mailbox\n' "$P" "$N" > $u/nudnik-mailbox.service
+    printf '[Timer]\nOnCalendar=*:*:00/30\nAccuracySec=5s\n[Install]\nWantedBy=timers.target\n' > $u/nudnik-mailbox.timer
     systemctl --user daemon-reload && systemctl --user enable --now nudnik.timer
     if [ -s ~/.claude/channels/telegram/access.json ]; then
       systemctl --user enable --now nudnik-chat.service nudnik-chat-restart.timer nudnik-due.timer
+      [ -z "${MAILBOX_CMD:-}" ] || systemctl --user enable --now nudnik-mailbox.timer
     else echo "Telegram chat not set up yet (see README): nudnik-chat.service not started."; fi
     systemctl --user list-timers 'nudnik*' ;;
   chat)   # the Telegram conversation in tmux "chat". It runs in chat/ so --continue resumes the chat, never a briefing run.
@@ -65,6 +68,13 @@ case "${1:-}" in
       else printf '%s\t%s\n' "$when" "$prompt" >> "$keep"; fi
     done < $f
     mv "$keep" $f ;;
+  mailbox)   # every 30 s: ring the chat session when the other assistant (or the owner, in the Sheet) left a message.
+             # Only a fixed notice with message ids is typed in, never message text: the chat reads that with
+             # mailbox_read, as untrusted data.
+    [ -n "${MAILBOX_CMD:-}" ] || exit 0; tmux has-session -t chat 2>/dev/null || exit 0
+    ids=$($MAILBOX_CMD check | jq -r '.new | map(select(test("^[a-z]{1,8}-[0-9]{1,6}$"))) | join(" ")')
+    [ -z "$ids" ] || { tmux send-keys -t chat -l "[mailbox] new message(s): $ids. Read them with mailbox_read." \
+      && tmux send-keys -t chat Enter; } ;;
   briefing)
     d=$(date +%F); last=$(ls briefing | grep -v "^$d" | tail -1 || true); last=${last%.md}
     run "$(cat prompts/briefing.md)

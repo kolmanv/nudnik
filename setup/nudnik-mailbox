@@ -1,0 +1,285 @@
+#!/usr/bin/env python3
+"""A mailbox between two assistants (e.g. nudnik and a work assistant) in a Google Sheet, with shared files in a
+Drive folder. Each side runs its own copy with its own name. This program holds the Google key and only ever
+touches that one Sheet and that one folder; the assistant reaches it through bin/mailbox-mcp (as another user, via
+sudo), so it never holds the key.
+
+Settings (MAILBOX_ENV, default /etc/nudnik-google/mailbox.env):
+  MAILBOX_CREDS      Google authorized-user JSON (client_id, client_secret, refresh_token, token_uri) with Drive
+                     and Sheets access, e.g. the file workspace-mcp keeps in its credentials folder
+  MAILBOX_ME         this side's name, e.g. nudnik            MAILBOX_PEER   the other side's name, e.g. work
+  MAILBOX_PREFIX     this side's id prefix, e.g. n (ids n-0001, n-0002...)
+  MAILBOX_SHEET      spreadsheet id                           MAILBOX_FOLDER Drive folder id for shared files
+  MAILBOX_DOWNLOADS  where fetched files are saved            MAILBOX_STATE  folder for local state
+
+  nudnik-mailbox init <name>       create the Drive folder <name> with a "files" folder and the "mailbox" Sheet; prints
+                                   MAILBOX_SHEET and MAILBOX_FOLDER (the other side uses the same two ids)
+  nudnik-mailbox read [json]       messages to me: {"thread": id} | {"recent": n} | {} (= not yet read; marks them read)
+  nudnik-mailbox send < json       {"kind", "text", "re"?, "file"?}; prints the new id
+  nudnik-mailbox status <id> <st>  set the status of a message to me: read, taken, declined, done
+  nudnik-mailbox upload <name>     file bytes on stdin -> the shared folder; prints {"id", "name", "link"}
+  nudnik-mailbox fetch <file id>   save a file from the shared folder to MAILBOX_DOWNLOADS; prints the path
+  nudnik-mailbox check             ids of messages to me not announced before (for the doorbell); marks them announced
+"""
+import json, os, re, sys, time, urllib.error, urllib.parse, urllib.request
+
+COLS = ["id", "re", "from", "to", "kind", "text", "file", "time", "status", "updated"]
+KINDS = {"task", "time", "question", "answer", "update", "note", "done"}
+STATUSES = {"read", "taken", "declined", "done"}
+THREAD_CAP = 4        # rows in a thread since the owner last wrote in it; then the owner decides
+TEXT_MAX = 2000
+FILE_MAX = 200 * 1024 * 1024
+TAB = "messages"
+ID_RE = re.compile(r"^[a-z]{1,8}-\d{1,6}$")
+FILE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{10,100}$")
+SHEETS = "https://sheets.googleapis.com/v4/spreadsheets"
+DRIVE = "https://www.googleapis.com/drive/v3/files"
+UPLOAD = "https://www.googleapis.com/upload/drive/v3/files"
+
+
+def die(msg):
+    sys.exit(f"mailbox: {msg}")
+
+
+def settings():
+    vals = {}
+    for line in open(os.environ.get("MAILBOX_ENV", "/etc/nudnik-google/mailbox.env")):
+        if "=" in line and not line.lstrip().startswith("#"):
+            k, v = line.strip().split("=", 1)
+            vals[k] = v.strip().strip('"')
+    for k in ("MAILBOX_CREDS", "MAILBOX_ME"):
+        if not vals.get(k):
+            die(f"{k} is not set")
+    vals.setdefault("MAILBOX_PREFIX", vals["MAILBOX_ME"][0])
+    vals.setdefault("MAILBOX_STATE", os.path.expanduser("~/.mailbox"))
+    vals.setdefault("MAILBOX_DOWNLOADS", os.path.expanduser("~/mailbox-files"))
+    return vals
+
+
+S = settings()
+_token = None
+
+
+def token():
+    global _token
+    if not _token:
+        c = json.load(open(S["MAILBOX_CREDS"]))
+        form = {"grant_type": "refresh_token", "refresh_token": c["refresh_token"], "client_id": c["client_id"],
+                "client_secret": c["client_secret"]}
+        req = urllib.request.Request(c.get("token_uri") or "https://oauth2.googleapis.com/token",
+                                     data=urllib.parse.urlencode(form).encode())
+        with urllib.request.urlopen(req, timeout=30) as r:
+            _token = json.load(r)["access_token"]
+    return _token
+
+
+def api(method, url, body=None, raw=None, ctype=None, want="json"):
+    headers = {"Authorization": f"Bearer {token()}"}
+    data = None
+    if body is not None:
+        data, headers["Content-Type"] = json.dumps(body).encode(), "application/json"
+    elif raw is not None:
+        data, headers["Content-Type"] = raw, ctype or "application/octet-stream"
+    req = urllib.request.Request(url, data=data, method=method, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=300) as r:
+            if want == "headers":
+                return r.headers
+            return r.read() if want == "bytes" else json.load(r)
+    except urllib.error.HTTPError as e:
+        try:
+            msg = json.load(e).get("error", {}).get("message", "")
+        except Exception:
+            msg = ""
+        die(f"Google answered {e.code} {msg}".strip())
+
+
+def need(*keys):
+    for k in keys:
+        if not S.get(k):
+            die(f"{k} is not set: run init first")
+
+
+def rows():
+    need("MAILBOX_SHEET")
+    r = api("GET", f"{SHEETS}/{S['MAILBOX_SHEET']}/values/{TAB}!A2:J")
+    out = []
+    for n, v in enumerate(r.get("values", []), start=2):
+        row = dict(zip(COLS, [str(x) for x in v] + [""] * (len(COLS) - len(v))))
+        row["row"] = n
+        if not row["id"] and row["from"] == "owner":
+            row["id"] = f"o-{n}"          # the owner may type a row without an id
+        out.append(row)
+    return out
+
+
+def mine(row):
+    """A message to me: sent to me, from the other side or the owner."""
+    return row["to"] == S["MAILBOX_ME"] and row["from"] != S["MAILBOX_ME"]
+
+
+def root(by_id, row):
+    seen = set()
+    while row["re"] in by_id and row["id"] not in seen:
+        seen.add(row["id"])
+        row = by_id[row["re"]]
+    return row["id"]
+
+
+def thread(all_rows, rid):
+    by_id = {r["id"]: r for r in all_rows}
+    if rid not in by_id:
+        die(f"no message {rid}")
+    top = root(by_id, by_id[rid])
+    return [r for r in all_rows if root(by_id, r) == top]
+
+
+def now():
+    return time.strftime("%Y-%m-%d %H:%M")
+
+
+def set_cells(row_no, first, values):
+    rng = f"{TAB}!{first}{row_no}"
+    api("PUT", f"{SHEETS}/{S['MAILBOX_SHEET']}/values/{urllib.parse.quote(rng)}?valueInputOption=RAW",
+        {"values": [values]})
+
+
+def public(r):
+    return {k: r[k] for k in COLS if r.get(k)}
+
+
+def cmd_read(arg):
+    q = json.loads(arg) if arg else {}
+    all_rows = rows()
+    if q.get("thread"):
+        return [public(r) for r in thread(all_rows, q["thread"])]
+    if q.get("recent"):
+        return [public(r) for r in all_rows[-min(int(q["recent"]), 50):]]
+    new = [r for r in all_rows if mine(r) and not r["status"]]
+    for r in new:
+        set_cells(r["row"], "I", ["read", now()])
+    return [public(r) for r in new]
+
+
+def cmd_send():
+    m = json.load(sys.stdin)
+    kind, text, re_id = m.get("kind", ""), " ".join(str(m.get("text", "")).split()), m.get("re") or ""
+    if kind not in KINDS:
+        die(f"kind must be one of {', '.join(sorted(KINDS))}")
+    if not text or len(text) > TEXT_MAX:
+        die(f"text must be 1-{TEXT_MAX} characters")
+    need("MAILBOX_PEER")
+    all_rows = rows()
+    if re_id:
+        t = thread(all_rows, re_id)
+        since_owner = 0
+        for r in t:
+            since_owner = 0 if r["from"] == "owner" else since_owner + 1
+        if since_owner >= THREAD_CAP:
+            die(f"thread {t[0]['id']} has {since_owner} messages since the owner last wrote in it: ask the owner, "
+                "and send their answer as a new message (no re)")
+    n = 1 + max([int(r["id"].split("-")[1]) for r in all_rows
+                 if r["id"].startswith(S["MAILBOX_PREFIX"] + "-") and ID_RE.match(r["id"])] or [0])
+    new_id = f"{S['MAILBOX_PREFIX']}-{n:04d}"
+    f = m.get("file") or ""
+    if f and not re.match(r"^https://drive\.google\.com/file/d/[A-Za-z0-9_-]+/view$", f):
+        die("file must be a link that upload returned")
+    row = [new_id, re_id, S["MAILBOX_ME"], S["MAILBOX_PEER"], kind, text, f, now(), "", ""]
+    api("POST", f"{SHEETS}/{S['MAILBOX_SHEET']}/values/{TAB}!A:J:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS",
+        {"values": [row]})
+    return {"id": new_id}
+
+
+def cmd_status(rid, st):
+    if st not in STATUSES:
+        die(f"status must be one of {', '.join(sorted(STATUSES))}")
+    for r in rows():
+        if r["id"] == rid:
+            if not mine(r):
+                die("you can only set the status of a message sent to you")
+            set_cells(r["row"], "I", [st, now()])
+            return {"id": rid, "status": st}
+    die(f"no message {rid}")
+
+
+def cmd_upload(name):
+    need("MAILBOX_FOLDER")
+    name = re.sub(r"[^\w .()-]", "_", os.path.basename(name))[:120] or "file"
+    data = sys.stdin.buffer.read(FILE_MAX + 1)
+    if len(data) > FILE_MAX:
+        die("file is larger than 200 MB")
+    h = api("POST", f"{UPLOAD}?uploadType=resumable&fields=id",
+            {"name": name, "parents": [S["MAILBOX_FOLDER"]]}, want="headers")
+    f = api("PUT", h["Location"], raw=data)
+    return {"id": f["id"], "name": name, "link": f"https://drive.google.com/file/d/{f['id']}/view"}
+
+
+def cmd_fetch(file_id):
+    need("MAILBOX_FOLDER")
+    if not FILE_ID_RE.match(file_id):
+        die("not a Drive file id")
+    meta = api("GET", f"{DRIVE}/{file_id}?fields=name,mimeType,size,parents")
+    if S["MAILBOX_FOLDER"] not in meta.get("parents", []):
+        die("that file is not in the shared folder")
+    if meta["mimeType"].startswith("application/vnd.google-apps"):
+        die(f"a Google Doc/Sheet/Slides file: read it with the google tools (id {file_id})")
+    if int(meta.get("size", 0)) > FILE_MAX:
+        die("file is larger than 200 MB")
+    data = api("GET", f"{DRIVE}/{file_id}?alt=media", want="bytes")
+    os.makedirs(S["MAILBOX_DOWNLOADS"], exist_ok=True)
+    name = re.sub(r"[^\w .()-]", "_", meta["name"])[:120] or "file"
+    path = os.path.join(S["MAILBOX_DOWNLOADS"], f"{time.strftime('%Y%m%d-%H%M%S')}-{name}")
+    with open(path, "wb") as fh:
+        fh.write(data)
+    return {"path": path, "name": meta["name"], "size": len(data)}
+
+
+def cmd_check():
+    os.makedirs(S["MAILBOX_STATE"], mode=0o700, exist_ok=True)
+    seen_f = os.path.join(S["MAILBOX_STATE"], "announced")
+    seen = set(open(seen_f).read().split()) if os.path.exists(seen_f) else set()
+    new = [r["id"] for r in rows() if mine(r) and not r["status"] and r["id"] not in seen and ID_RE.match(r["id"])]
+    if new:
+        with open(seen_f, "a") as fh:
+            fh.write("\n".join(new) + "\n")
+    return {"new": new}
+
+
+def cmd_init(name):
+    folder = api("POST", f"{DRIVE}?fields=id", {"name": name, "mimeType": "application/vnd.google-apps.folder"})
+    files = api("POST", f"{DRIVE}?fields=id", {"name": "files", "mimeType": "application/vnd.google-apps.folder",
+                                               "parents": [folder["id"]]})
+    sheet = api("POST", SHEETS, {"properties": {"title": "mailbox"}, "sheets": [{"properties": {
+        "title": TAB, "gridProperties": {"frozenRowCount": 1}}}]})
+    sid = sheet["spreadsheetId"]
+    api("PATCH", f"{DRIVE}/{sid}?addParents={folder['id']}&removeParents=root&fields=id", {})
+    api("PUT", f"{SHEETS}/{sid}/values/{TAB}!A1:J1?valueInputOption=RAW", {"values": [COLS]})
+    return {"MAILBOX_SHEET": sid, "MAILBOX_FOLDER": files["id"], "folder": folder["id"]}
+
+
+def main():
+    a = sys.argv[1:] or ["help"]
+    try:
+        if a[0] == "read":
+            out = cmd_read(a[1] if len(a) > 1 else "")
+        elif a[0] == "send":
+            out = cmd_send()
+        elif a[0] == "status" and len(a) == 3:
+            out = cmd_status(a[1], a[2])
+        elif a[0] == "upload" and len(a) == 2:
+            out = cmd_upload(a[1])
+        elif a[0] == "fetch" and len(a) == 2:
+            out = cmd_fetch(a[1])
+        elif a[0] == "check":
+            out = cmd_check()
+        elif a[0] == "init" and len(a) == 2:
+            out = cmd_init(a[1])
+        else:
+            sys.exit(__doc__)
+    except (ValueError, KeyError, OSError) as e:
+        die(f"{type(e).__name__}: {e}")
+    print(json.dumps(out, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    main()
