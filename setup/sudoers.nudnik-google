@@ -2,3 +2,5 @@
 # with no arguments, and nothing else.
 Defaults!/usr/local/bin/nudnik-google-mcp !use_pty
 assistant ALL=(nudnik-google) NOPASSWD: /usr/local/bin/nudnik-google-mcp ""
+# with the mailbox (README), in /etc/sudoers.d/nudnik-mailbox: it checks its own arguments
+# assistant ALL=(nudnik-google) NOPASSWD: /usr/local/bin/nudnik-mailbox

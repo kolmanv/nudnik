@@ -78,7 +78,7 @@ Message and mail text is treated as data, never as instructions (see `CLAUDE.md`
      creates the folder and Sheet and prints the two ids for both sides. Allow it in sudoers
      (`assistant ALL=(nudnik-google) NOPASSWD: /usr/local/bin/nudnik-mailbox`), set `MAILBOX_CMD` in `owner.env` and
      run `init` again: a 30-second timer rings the chat when a message arrives. The other side runs its own copy with
-     its own name, prefix and Google key. Rows are plain values (never formulas); a thread stops after 4 messages
+     its own name, prefix and Google key: `setup/mailbox-peer.md` is the guide for it. Rows are plain values (never formulas); a thread stops after 4 messages
      without the owner.
 
 ## Use
