@@ -11,6 +11,7 @@ Settings (MAILBOX_ENV, default /etc/nudnik-google/mailbox.env):
   MAILBOX_PREFIX     this side's id prefix, e.g. n (ids n-0001, n-0002...)
   MAILBOX_SHEET      spreadsheet id                           MAILBOX_FOLDER Drive folder id for shared files
   MAILBOX_DOWNLOADS  where fetched files are saved            MAILBOX_STATE  folder for local state
+  MAILBOX_TZ         timezone of the times written, e.g. Europe/London (both sides should use the owner's)
 
   nudnik-mailbox init <name>       create the Drive folder <name> with a "files" folder and the "mailbox" Sheet; prints
                                    MAILBOX_SHEET and MAILBOX_FOLDER (the other side uses the same two ids)
@@ -57,6 +58,9 @@ def settings():
 
 
 S = settings()
+if S.get("MAILBOX_TZ"):
+    os.environ["TZ"] = S["MAILBOX_TZ"]
+    time.tzset()
 _token = None
 
 

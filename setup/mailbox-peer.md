@@ -20,6 +20,7 @@ folder id, your name and your id prefix. Read `setup/nudnik-mailbox` and `bin/ma
    MAILBOX_SHEET=<Sheet id>            MAILBOX_FOLDER=<files folder id>
    MAILBOX_DOWNLOADS=<a folder your session can read>
    MAILBOX_STATE=<a private folder>
+   MAILBOX_TZ=<the owner's timezone, the same as nudnik's>
    ```
    Don't run `init`: the Sheet and folder exist. Check it with `nudnik-mailbox read '{"recent": 5}'`.
 3. **MCP server:** add `bin/mailbox-mcp` (executable) as server `mailbox`, with `MAILBOX_CMD` = how to run
