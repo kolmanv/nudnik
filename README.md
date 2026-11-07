@@ -74,6 +74,9 @@ Message and mail text is treated as data, never as instructions (see `CLAUDE.md`
      Create the user, a folder `/etc/nudnik-zoom-files` (`root:nudnik-zoom`, mode 750) where `nudnik-zoom-token
      refresh` puts the access token alone, and `/var/lib/nudnik-zoom/downloads` (`nudnik-zoom:assistant`, mode
      2750); allow it in sudoers (`assistant ALL=(nudnik-zoom) NOPASSWD: /usr/local/bin/nudnik-zoom-download`).
+   - Browsing: [galshan](https://github.com/kolmanv/galshan), a read-only browser API with no AI inside, through a
+     root-only nginx proxy on 127.0.0.1 that adds nudnik's galshan key (`galshan-proxy.nginx.example`);
+     `bin/galshan-mcp` is the MCP server (`browse`). Let the container reach galshan's address and port.
    - Cutting audio and video: `bin/media-mcp` (`cut_audio`) runs ffmpeg (install `ffmpeg`) with fixed arguments on
      saved files and writes the pieces to `clips/`.
    - A mailbox with another assistant (e.g. one for work, on another machine and account): a Google Sheet for
@@ -107,6 +110,7 @@ If the run fails, a one-line "briefing failed" message is sent instead, so silen
 - `bin/media-mcp`: cuts pieces out of audio and video files (ffmpeg)
 - `bin/mailbox-mcp`, `setup/nudnik-mailbox`: the mailbox with another assistant
 - `bin/zoom-files-mcp`, `setup/nudnik-zoom-download`: saves files of Zoom recordings
+- `bin/galshan-mcp`: opens web pages through galshan
 - `owner.env.example`, `mcp.json.example`: templates for your private config
 - Outputs (git-ignored): `briefing/`, `tasks/<area>/<task>/task.md`, `TASKS.md`, `ARCHIVE.md`, `state/`, `transcripts/`, `clips/`
 

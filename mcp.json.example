@@ -6,6 +6,7 @@
     "zoom": {"type": "http", "url": "http://127.0.0.1:8772/mcp"},
     "media": {"type": "stdio", "command": "/home/<user>/nudnik/bin/media-mcp"},
     "mailbox": {"type": "stdio", "command": "/home/<user>/nudnik/bin/mailbox-mcp"},
-    "zoom-files": {"type": "stdio", "command": "/home/<user>/nudnik/bin/zoom-files-mcp"}
+    "zoom-files": {"type": "stdio", "command": "/home/<user>/nudnik/bin/zoom-files-mcp"},
+    "galshan": {"type": "stdio", "command": "/home/<user>/nudnik/bin/galshan-mcp"}
   }
 }
