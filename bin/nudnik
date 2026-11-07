@@ -28,6 +28,21 @@ rows() {   # rows open|closed: one sortable line per task
     if [ $k = open ]; then printf '%s %s\t| %s | %s | %s | %s | %s | %s |\n' "$(g pri)" "$(g since)" "$(g pri)" "${d#tasks/}" \
       "$(g status)" "$(g since)" "$(g due)" "$(g title)"
     else printf '%s\t| %s | %s | %s |\n' "$(g closed)" "$(g closed)" "${d#tasks/}" "$(g title)"; fi; done; }
+typed() {   # what was typed into the chat's input box (the lines between the last two rules), minus the dimmed
+            # prompt suggestion Claude Code shows there
+  tmux capture-pane -p -e -t chat | awk '{l[NR]=$0} /^(\x1b\[[0-9;]*m)*─/{a=b; b=NR} END{for(i=a+1;i<b;i++) print l[i]}' \
+    | sed -E 's/\x1b\[2m[^\x1b]*//g; s/\x1b\[[0-9;]*m//g; s/^❯//' | tr -d ' \t\n\302\240'; }
+ready() {   # the chat is idle with an empty input box: no answer running, no dialog open
+  local screen; screen=$(tmux capture-pane -p -t chat) || return 1
+  [ "$(grep -c '^─' <<<"$screen")" -ge 2 ] && grep -q '^❯' <<<"$screen" || return 1   # the input box is on screen
+  grep -qiE "esc to interrupt|do you want|don.t ask again|esc to cancel|enter to confirm|compacting" <<<"$screen" && return 1
+  grep -qE '^[✻✶✳✢✽·*] .*…' <<<"$screen" && return 1   # the spinner of an answer in progress
+  [ -z "$(typed)" ]; }
+type_in() {   # type_in <line>: type one line into the chat and submit it, only when the chat is ready; check it went in
+  local i; ready || return 1
+  tmux send-keys -t chat -l "$1"; sleep 0.3; tmux send-keys -t chat Enter
+  for i in 1 2 3 4 5 6 7 8 9 10; do sleep 1; [ -z "$(typed)" ] && return 0; [ $i = 5 ] && tmux send-keys -t chat Enter; done
+  tmux send-keys -t chat C-u; echo "the chat did not take the line; cleared it" >&2; return 1; }
 mkdir -p briefing tasks state reminders
 case "${1:-}" in
   init)   # systemd user units: the daily briefing (Persistent: a run missed while off runs at boot), the Telegram
@@ -57,24 +72,28 @@ case "${1:-}" in
     # --remote-control: the same conversation also opens in the Claude app (Code tab) as "nudnik"
     tmux new-session -d -s chat -x 200 -y 50 -c "$N/chat" "claude ${c:+--continue} --permission-mode default --remote-control nudnik \
       --settings $N/chat/settings.json --add-dir $N --mcp-config $C/mcp.json --channels plugin:telegram@claude-plugins-official" ;;
-  due)   # every minute: hand reminders that are due to the chat session. The chat writes them to
-         # reminders/scheduled.tsv as "YYYY-MM-DD HH:MM<TAB>prompt"; sent lines move to reminders/done.tsv.
-    f=reminders/scheduled.tsv; [ -s $f ] && tmux has-session -t chat 2>/dev/null || exit 0
-    now=$(date '+%F %H:%M'); keep=$(mktemp)
-    while IFS=$'\t' read -r when prompt; do
-      if [ -n "$prompt" ] && [[ ! "$when" > "$now" ]]; then
-        tmux send-keys -t chat -l "[reminder due $when] $prompt" && tmux send-keys -t chat Enter
-        printf '%s\t%s\t%s\n' "$when" "$prompt" "sent $(date '+%F %H:%M')" >> reminders/done.tsv
-      else printf '%s\t%s\n' "$when" "$prompt" >> "$keep"; fi
+  due)   # every minute: send reminders that are due straight to Telegram, with no AI in between. The chat writes
+         # them to reminders/scheduled.tsv as "YYYY-MM-DD HH:MM<TAB>text"; sent lines move to reminders/done.tsv, and a
+         # line that fails to send stays for the next minute.
+    f=reminders/scheduled.tsv; [ -s $f ] || exit 0
+    now=$(date '+%F %H:%M'); keep=$(mktemp); msg=$(mktemp)
+    re='^([0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2})[[:space:]]+(.*[^[:space:]])[[:space:]]*$'
+    while IFS= read -r line || [ -n "$line" ]; do
+      if [[ $line =~ $re ]] && [[ ! "${BASH_REMATCH[1]}" > "$now" ]]; then   # also takes a line whose tab moved
+        when=${BASH_REMATCH[1]}; text=${BASH_REMATCH[2]}
+        printf '⏰ %s\n' "$text" > "$msg"
+        if send "$msg"; then printf '%s\t%s\t%s\n' "$when" "$text" "sent $(date '+%F %H:%M')" >> reminders/done.tsv
+        else printf '%s\n' "$line" >> "$keep"; fi
+      elif [ -n "$line" ]; then printf '%s\n' "$line" >> "$keep"; fi
     done < $f
-    mv "$keep" $f ;;
+    rm -f "$msg"; mv "$keep" $f ;;
   mailbox)   # every 30 s: ring the chat session when the other assistant (or the owner, in the Sheet) left a message.
              # Only a fixed notice with message ids is typed in, never message text: the chat reads that with
-             # mailbox_read, as untrusted data.
+             # mailbox_read, as untrusted data. Ids count as announced only once the chat took the notice.
     [ -n "${MAILBOX_CMD:-}" ] || exit 0; tmux has-session -t chat 2>/dev/null || exit 0
     ids=$($MAILBOX_CMD check | jq -r '.new | map(select(test("^[a-z]{1,8}-[0-9]{1,6}$"))) | join(" ")')
-    [ -z "$ids" ] || { tmux send-keys -t chat -l "[mailbox] new message(s): $ids. Read them with mailbox_read." \
-      && tmux send-keys -t chat Enter; } ;;
+    [ -z "$ids" ] || { type_in "[mailbox] new message(s): $ids. Read them with mailbox_read." \
+      && $MAILBOX_CMD announce $ids >/dev/null; } ;;
   briefing)
     d=$(date +%F); last=$(ls briefing | grep -v "^$d" | tail -1 || true); last=${last%.md}
     run "$(cat prompts/briefing.md)

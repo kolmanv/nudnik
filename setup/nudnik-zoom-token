@@ -3,7 +3,9 @@
 
 Run as root. Keys live in /etc/nudnik-zoom (mode 700): zoom.env (ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET, ZOOM_REDIRECT,
 optional ZOOM_MCP_URL), token.json (written here). The access token goes into /etc/nginx/nudnik-zoom-auth.conf (mode 600),
-which the proxy in zoom-proxy.nginx.example includes; nginx is reloaded after each change.
+which the proxy in zoom-proxy.nginx.example includes; nginx is reloaded after each change. If /etc/nudnik-zoom-files
+exists (root:nudnik-zoom, mode 750), the access token alone also goes there as access-token (mode 640, the folder's
+group), for nudnik-zoom-download; the refresh token never leaves /etc/nudnik-zoom.
 
   nudnik-zoom-token auth-url         print the sign-in link (ZOOM_REDIRECT must be in the Zoom app's allow list)
   nudnik-zoom-token auth <address>   finish sign-in with the address the browser was sent to (it fails to load)
@@ -18,6 +20,7 @@ import base64, hashlib, json, os, secrets, subprocess, sys, time, urllib.error, 
 
 DIR = "/etc/nudnik-zoom"
 NGINX_INC = "/etc/nginx/nudnik-zoom-auth.conf"
+FILES_DIR = "/etc/nudnik-zoom-files"
 SCOPES = ("meeting:write:meeting meeting:read:search meeting:delete:meeting meeting:update:in_meeting_controls "
           "meeting:update:meeting meeting:read:assets cloud_recording:read:list_user_recordings "
           "cloud_recording:read:content")
@@ -35,9 +38,11 @@ def env():
     return vals
 
 
-def save(path, data, mode=0o600):
+def save(path, data, mode=0o600, gid=None):
     tmp = path + ".new"
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode)
+    if gid is not None:
+        os.fchown(fd, 0, gid)
     with os.fdopen(fd, "w") as f:
         f.write(data)
     os.replace(tmp, path)
@@ -59,7 +64,13 @@ def token_request(e, form):
                                           if k in t}))
     save(NGINX_INC, f'proxy_set_header Authorization "Bearer {t["access_token"]}";\n')
     subprocess.run(["systemctl", "reload", "nginx"], check=True)
+    share(t)
     return t
+
+
+def share(t):
+    if os.path.isdir(FILES_DIR):
+        save(f"{FILES_DIR}/access-token", t["access_token"] + "\n", 0o640, os.stat(FILES_DIR).st_gid)
 
 
 def main():
@@ -89,6 +100,8 @@ def main():
         t = json.load(open(f"{DIR}/token.json"))
         if t["expires_at"] - time.time() < 20 * 60:
             token_request(e, {"grant_type": "refresh_token", "refresh_token": t["refresh_token"]})
+        elif os.path.isdir(FILES_DIR) and not os.path.exists(f"{FILES_DIR}/access-token"):
+            share(t)
     elif cmd == "status":
         try:
             t = json.load(open(f"{DIR}/token.json"))

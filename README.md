@@ -68,6 +68,12 @@ Message and mail text is treated as data, never as instructions (see `CLAUDE.md`
      General app (user-managed) in the Zoom App Marketplace, with the scopes the server lists and an https redirect on
      a domain you own (Zoom refuses localhost and IP addresses); keys in `/etc/nudnik-zoom/zoom.env`. Sign in once
      with `nudnik-zoom-token auth-url`, then `auth <address>` with the address the browser failed to load.
+     Zoom's server only gives links to recordings; to save the files themselves (to cut, transcribe or share them),
+     `setup/nudnik-zoom-download` (in `/usr/local/bin`, run as a `nudnik-zoom` user) downloads one file from a
+     download link or a meeting's uuid with the token, and `bin/zoom-files-mcp` is the MCP server (`zoom_download`).
+     Create the user, a folder `/etc/nudnik-zoom-files` (`root:nudnik-zoom`, mode 750) where `nudnik-zoom-token
+     refresh` puts the access token alone, and `/var/lib/nudnik-zoom/downloads` (`nudnik-zoom:assistant`, mode
+     2750); allow it in sudoers (`assistant ALL=(nudnik-zoom) NOPASSWD: /usr/local/bin/nudnik-zoom-download`).
    - Cutting audio and video: `bin/media-mcp` (`cut_audio`) runs ffmpeg (install `ffmpeg`) with fixed arguments on
      saved files and writes the pieces to `clips/`.
    - A mailbox with another assistant (e.g. one for work, on another machine and account): a Google Sheet for
@@ -100,6 +106,7 @@ If the run fails, a one-line "briefing failed" message is sent instead, so silen
 - `bin/katzran-mcp`: transcribes audio and video files with katzran
 - `bin/media-mcp`: cuts pieces out of audio and video files (ffmpeg)
 - `bin/mailbox-mcp`, `setup/nudnik-mailbox`: the mailbox with another assistant
+- `bin/zoom-files-mcp`, `setup/nudnik-zoom-download`: saves files of Zoom recordings
 - `owner.env.example`, `mcp.json.example`: templates for your private config
 - Outputs (git-ignored): `briefing/`, `tasks/<area>/<task>/task.md`, `TASKS.md`, `ARCHIVE.md`, `state/`, `transcripts/`, `clips/`
 

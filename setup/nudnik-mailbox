@@ -20,7 +20,8 @@ Settings (MAILBOX_ENV, default /etc/nudnik-google/mailbox.env):
   nudnik-mailbox status <id> <st>  set the status of a message to me: read, taken, declined, done
   nudnik-mailbox upload <name>     file bytes on stdin -> the shared folder; prints {"id", "name", "link"}
   nudnik-mailbox fetch <file id>   save a file from the shared folder to MAILBOX_DOWNLOADS; prints the path
-  nudnik-mailbox check             ids of messages to me not announced before (for the doorbell); marks them announced
+  nudnik-mailbox check             ids of messages to me not announced yet (for the doorbell)
+  nudnik-mailbox announce <id>...  mark those ids announced (once the doorbell rang)
 """
 import json, os, re, sys, time, urllib.error, urllib.parse, urllib.request
 
@@ -242,11 +243,16 @@ def cmd_check():
     os.makedirs(S["MAILBOX_STATE"], mode=0o700, exist_ok=True)
     seen_f = os.path.join(S["MAILBOX_STATE"], "announced")
     seen = set(open(seen_f).read().split()) if os.path.exists(seen_f) else set()
-    new = [r["id"] for r in rows() if mine(r) and not r["status"] and r["id"] not in seen and ID_RE.match(r["id"])]
-    if new:
-        with open(seen_f, "a") as fh:
-            fh.write("\n".join(new) + "\n")
-    return {"new": new}
+    return {"new": [r["id"] for r in rows() if mine(r) and not r["status"] and r["id"] not in seen and ID_RE.match(r["id"])]}
+
+
+def cmd_announce(ids):
+    if not ids or not all(ID_RE.match(i) for i in ids):
+        raise SystemExit("announce takes message ids")
+    os.makedirs(S["MAILBOX_STATE"], mode=0o700, exist_ok=True)
+    with open(os.path.join(S["MAILBOX_STATE"], "announced"), "a") as fh:
+        fh.write("\n".join(ids) + "\n")
+    return {"announced": ids}
 
 
 def cmd_init(name):
@@ -276,6 +282,8 @@ def main():
             out = cmd_fetch(a[1])
         elif a[0] == "check":
             out = cmd_check()
+        elif a[0] == "announce":
+            out = cmd_announce(a[1:])
         elif a[0] == "init" and len(a) == 2:
             out = cmd_init(a[1])
         else:

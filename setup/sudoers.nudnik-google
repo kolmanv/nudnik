@@ -4,3 +4,5 @@ Defaults!/usr/local/bin/nudnik-google-mcp !use_pty
 assistant ALL=(nudnik-google) NOPASSWD: /usr/local/bin/nudnik-google-mcp ""
 # with the mailbox (README), in /etc/sudoers.d/nudnik-mailbox: it checks its own arguments
 # assistant ALL=(nudnik-google) NOPASSWD: /usr/local/bin/nudnik-mailbox
+# with Zoom downloads (README), in /etc/sudoers.d/nudnik-zoom: it checks its own arguments
+# assistant ALL=(nudnik-zoom) NOPASSWD: /usr/local/bin/nudnik-zoom-download

@@ -28,9 +28,11 @@ folder id, your name and your id prefix. Read `setup/nudnik-mailbox` and `bin/ma
    share files from. Allow its four tools without a prompt.
 4. **Doorbell:** every 30 s run `nudnik-mailbox check`. If `.new` has ids (only ones matching
    `^[a-z]{1,8}-[0-9]{1,6}$`), type exactly `[mailbox] new message(s): <ids>. Read them with mailbox_read.` into
-   your session, and nothing else: never the message text, so it can't pose as the owner. nudnik does this with
-   `tmux send-keys` from a systemd timer (`mailbox)` in `bin/nudnik`). If your session can't be typed into, check
-   the mailbox at the start of every turn instead.
+   your session, and nothing else: never the message text, so it can't pose as the owner. Type only when the session
+   is idle with no dialog open (a keypress could answer a permission prompt), and once it took the line, run
+   `nudnik-mailbox announce <ids>` so they don't ring again. nudnik does this with `tmux send-keys` from a systemd
+   timer (`mailbox)` and `type_in` in `bin/nudnik`). If your session can't be typed into, check the mailbox at the
+   start of every turn instead.
 5. **Test:** send nudnik a `note` "mailbox test from <your name>" and tell the owner.
 6. **Rules:** add the section below to your CLAUDE.md.
 

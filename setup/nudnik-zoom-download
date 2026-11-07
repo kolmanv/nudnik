@@ -1,0 +1,179 @@
+#!/usr/bin/env python3
+"""Downloads one file of a Zoom cloud recording (audio, video, transcript, chat) for the assistant, so the assistant
+never holds the Zoom token.
+
+Run as the nudnik-zoom user (the assistant user may run only this, through sudo). It reads the access token that
+nudnik-zoom-token writes to ZOOM_TOKEN_FILE when /etc/nudnik-zoom-files exists (root:nudnik-zoom, mode 750), and
+saves into ZOOM_DOWNLOADS (nudnik-zoom:<assistant group>, mode 2750, so the chat can read the files).
+
+  nudnik-zoom-download <download link>
+  nudnik-zoom-download <meeting uuid or id> [audio|video|transcript|chat] [YYYY-MM-DD]
+
+A download link (https://...zoom.us/rec/download/...) is fetched as it is. Zoom makes new links on every call, so
+play and share links can't be traced back to a file: give the meeting instead. A meeting is looked up among the
+owner's recordings of the last ZOOM_LOOKBACK_MONTHS months; a recurring meeting's id means its newest recording, or
+the one on the date given. Kind defaults to audio, else video. Prints one line of JSON: path, bytes, type, topic,
+start. Never prints the token. Only https on zoom.us is ever contacted, redirects included.
+
+Settings (environment): ZOOM_TOKEN_FILE (default /etc/nudnik-zoom-files/access-token), ZOOM_DOWNLOADS (default
+/var/lib/nudnik-zoom/downloads), ZOOM_MAX_MB (default 2000), ZOOM_LOOKBACK_MONTHS (default 6).
+"""
+import datetime, json, os, re, sys, time, urllib.error, urllib.parse, urllib.request
+
+TOKEN_FILE = os.environ.get("ZOOM_TOKEN_FILE", "/etc/nudnik-zoom-files/access-token")
+OUT = os.environ.get("ZOOM_DOWNLOADS", "/var/lib/nudnik-zoom/downloads")
+MAX = int(os.environ.get("ZOOM_MAX_MB", "2000")) * 10**6
+MONTHS = int(os.environ.get("ZOOM_LOOKBACK_MONTHS", "6"))
+API = "https://api.zoom.us/v2"
+KINDS = {"audio": ("M4A",), "video": ("MP4",), "transcript": ("TRANSCRIPT", "CC"), "chat": ("CHAT",)}
+
+
+def zoom_host(url):
+    u = urllib.parse.urlparse(url)
+    h = (u.hostname or "").lower()
+    return u.scheme == "https" and (h == "zoom.us" or h.endswith(".zoom.us"))
+
+
+class ZoomOnly(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if not zoom_host(newurl):
+            raise RuntimeError("Zoom redirected outside zoom.us; stopped")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+OPENER = urllib.request.build_opener(ZoomOnly)
+
+
+def request(url, token):
+    req = urllib.request.Request(url)
+    req.add_header("Authorization", f"Bearer {token}")
+    try:
+        return OPENER.open(req, timeout=60)
+    except urllib.error.HTTPError as e:
+        body = e.read()[:300].decode(errors="replace")
+        msg = re.search(r'"message"\s*:\s*"([^"]*)"', body)
+        raise RuntimeError(f"Zoom answered {e.code}{': ' + msg[1] if msg else ''}") from None
+
+
+def recordings(token):
+    """The owner's cloud recordings, newest month first (Zoom allows at most one month per call)."""
+    end = datetime.date.today()
+    for _ in range(MONTHS):
+        start = end - datetime.timedelta(days=30)
+        page = ""
+        while True:
+            q = urllib.parse.urlencode({"from": start.isoformat(), "to": end.isoformat(), "page_size": 300,
+                                        "next_page_token": page})
+            with request(f"{API}/users/me/recordings?{q}", token) as r:
+                d = json.load(r)
+            yield from d.get("meetings", [])
+            page = d.get("next_page_token") or ""
+            if not page:
+                break
+        end = start - datetime.timedelta(days=1)
+
+
+def find(meeting, kind, date, token):
+    for m in recordings(token):
+        if meeting not in (m.get("uuid"), str(m.get("id"))):
+            continue
+        local = datetime.datetime.fromisoformat(m["start_time"].replace("Z", "+00:00")).astimezone()
+        if date and f"{local:%Y-%m-%d}" != date:
+            continue
+        files = [f for f in m.get("recording_files", []) if f.get("download_url")]
+        types = KINDS[kind] if kind else KINDS["audio"] + KINDS["video"]
+        hit = next((f for t in types for f in files if f.get("file_type") == t), None)
+        if not hit:
+            have = ", ".join(sorted({f.get("file_type", "?") for f in files}))
+            raise RuntimeError(f"that recording has no {kind or 'audio or video'} file (it has {have})")
+        return m, hit
+    raise RuntimeError(f"no recording of that meeting{' on ' + date if date else ''} in the last {MONTHS} months")
+
+
+def sniff(head):
+    """Zoom sends every file as application/octet-stream, so tell the kind from its first bytes."""
+    if head[4:8] == b"ftyp":
+        return "m4a" if head[8:12] in (b"M4A ", b"M4B ") else "mp4"
+    text = head.lstrip(b"\xef\xbb\xbf").lstrip()
+    if text.startswith(b"WEBVTT"):
+        return "vtt"
+    if text[:1] in (b"{", b"["):
+        return "json"
+    try:
+        head[:-3].decode()  # the cut may split the last character
+        return "txt"
+    except UnicodeDecodeError:
+        return "bin"
+
+
+def slug(s, n=40):
+    return re.sub(r"[^\w.-]+", "_", s or "").strip("_.")[:n]
+
+
+def main():
+    args = sys.argv[1:]
+    if not 1 <= len(args) <= 3:
+        sys.exit(__doc__)
+    first, kind, date = args[0].strip(), "", ""
+    for extra in args[1:]:
+        if extra in KINDS:
+            kind = extra
+        elif re.fullmatch(r"\d{4}-\d{2}-\d{2}", extra):
+            date = extra
+        else:
+            sys.exit(f"kind must be one of {', '.join(KINDS)}; a date is YYYY-MM-DD")
+    token = open(TOKEN_FILE).read().strip()
+
+    if first.startswith("https://"):
+        if kind or date:
+            sys.exit("a download link is one file already: give the meeting to choose a kind or date")
+        if len(first) > 2000 or not zoom_host(first) or not urllib.parse.urlparse(first).path.startswith("/rec/download/"):
+            if zoom_host(first) and re.match(r"^/rec/(play|share)/", urllib.parse.urlparse(first).path):
+                sys.exit("play and share links can't be downloaded: give the download link or the meeting's uuid or id")
+            sys.exit("only a Zoom download link (https://...zoom.us/rec/download/...) or a meeting uuid or id")
+        url, name, info = first, "", {}
+    elif re.fullmatch(r"\d{9,12}|[A-Za-z0-9+/=_-]{16,40}", first):
+        meeting, f = find(first, kind, date, token)
+        url = f["download_url"]
+        start = datetime.datetime.fromisoformat(meeting["start_time"].replace("Z", "+00:00")).astimezone()
+        ext = (f.get("file_extension") or f.get("file_type") or "bin").lower()
+        name = f"zoom-{start:%Y%m%d-%H%M}-{slug(meeting.get('topic'))}-{f.get('file_type', '').lower()}.{ext}"
+        info = {"type": f.get("file_type"), "topic": meeting.get("topic"), "start": f"{start:%Y-%m-%d %H:%M}"}
+    else:
+        sys.exit("give a Zoom download link or a meeting uuid or id")
+
+    with request(url, token) as r:
+        if "text/html" in r.headers.get("Content-Type", ""):
+            raise RuntimeError("Zoom sent a web page instead of the file (the link may need a browser sign-in)")
+        path = os.path.join(OUT, name or f"zoom-{time.strftime('%Y%m%d-%H%M%S')}")
+        size = int(r.headers.get("Content-Length") or 0)
+        if size > MAX:
+            raise RuntimeError(f"the file is {size // 10**6} MB, over the {MAX // 10**6} MB limit")
+        if name and size and os.path.exists(path) and os.path.getsize(path) == size:
+            print(json.dumps({"path": path, "bytes": size, **info, "note": "already downloaded"}, ensure_ascii=False))
+            return
+        tmp, got = path + ".part", 0
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o640)
+        with os.fdopen(fd, "wb") as out:
+            while chunk := r.read(1 << 20):
+                got += len(chunk)
+                if got > MAX:
+                    out.close()
+                    os.remove(tmp)
+                    raise RuntimeError(f"the file is over the {MAX // 10**6} MB limit")
+                out.write(chunk)
+    if size and got != size:
+        os.remove(tmp)
+        raise RuntimeError(f"download cut short ({got} of {size} bytes); try again")
+    if not name:
+        with open(tmp, "rb") as f:
+            path += "." + sniff(f.read(4096))
+    os.replace(tmp, path)
+    print(json.dumps({"path": path, "bytes": got, **info}, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (RuntimeError, OSError, ValueError) as e:
+        sys.exit(f"error: {e}")

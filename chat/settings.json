@@ -21,6 +21,7 @@
       "mcp__katzran__transcribe",
       "mcp__katzran__get_transcript",
       "mcp__media__cut_audio",
+      "mcp__zoom-files__zoom_download",
       "mcp__mailbox__mailbox_read",
       "mcp__mailbox__mailbox_send",
       "mcp__mailbox__mailbox_status",
