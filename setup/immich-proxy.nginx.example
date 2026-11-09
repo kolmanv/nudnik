@@ -1,0 +1,29 @@
+# /etc/nginx/conf.d/immich-proxy.conf (root, mode 600): local proxy to Immich for bin/immich-mcp. It adds nudnik's
+# Immich API key to every request, so the assistant user never sees the key, and lets through only the reads below.
+# Make the key with only: asset.read, asset.view, asset.download, album.read, person.read, server.about.
+# The container's firewall must allow this one address and port out (it blocks the home network otherwise).
+server {
+    listen 127.0.0.1:8774;
+    client_max_body_size 64k;
+    proxy_set_header x-api-key "<Immich API key>";
+    proxy_set_header Host $proxy_host;
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_read_timeout 300s;
+    proxy_buffering off;
+
+    # searches are POSTs in Immich, but only read
+    location ~ ^/api/search/(smart|metadata)$ {
+        limit_except POST { deny all; }
+        proxy_pass http://<Immich address>:2283;
+    }
+    location ~ ^/api/(people|search/person|albums|server/about)$ {
+        limit_except GET { deny all; }
+        proxy_pass http://<Immich address>:2283;
+    }
+    location ~ "^/api/assets/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(/thumbnail|/original|/ocr)?$" {
+        limit_except GET { deny all; }
+        proxy_pass http://<Immich address>:2283;
+    }
+    location / { return 404; }
+}

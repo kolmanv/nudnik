@@ -22,7 +22,7 @@ HOME = os.path.expanduser("~")
 URL = os.environ.get("KATZRAN_URL", "http://127.0.0.1:8771").rstrip("/")
 DIRS = [os.path.realpath(os.path.expanduser(d)) for d in os.environ.get(
     "KATZRAN_DIRS",
-    "~/.claude/channels/telegram/inbox:~/.claude/projects:/var/lib/nudnik-google/attachments:/var/lib/nudnik-zoom/downloads").split(":") if d]
+    "~/.claude/channels/telegram/inbox:~/.claude/projects:/var/lib/nudnik-google/attachments:/var/lib/nudnik-zoom/downloads:/var/lib/nudnik-immich/downloads").split(":") if d]
 OUT = os.path.expanduser(os.environ.get("KATZRAN_OUT", "~/nudnik/transcripts"))
 WAIT = 8 * 60  # a tool call waits this long; a longer job is picked up later with get_transcript
 LANGS = re.compile(r"^[a-z]{2}(,[a-z]{2})*$")

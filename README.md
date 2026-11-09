@@ -54,7 +54,10 @@ Message and mail text is treated as data, never as instructions (see `CLAUDE.md`
      `WORKSPACE_MCP_CREDENTIALS_DIR=/etc/nudnik-google/credentials`,
      `WORKSPACE_ATTACHMENT_DIR=/var/lib/nudnik-google/attachments`); the attachments folder is
      `nudnik-google:assistant` mode 2750 so the chat can attach files, and `nudnik-google-patch` makes saved files
-     group-readable and lets Google Drawings download as images (re-run it after upgrades). Your own OAuth client: Google Cloud project with the Gmail, Drive,
+     group-readable and lets Google Drawings download as images (re-run it after upgrades). Add `nudnik-google` to
+     the assistant user's group (`usermod -aG assistant nudnik-google`) so Drive uploads can read the Zoom and Immich
+     downloads; the assistant's home stays closed to it (mode 700). The server reads local files only from
+     `ALLOWED_FILE_DIRS` in `google.env`: list those download folders there. Your own OAuth client: Google Cloud project with the Gmail, Drive,
      Docs, Sheets and Calendar APIs, Web client, redirect `http://localhost:8000/oauth2callback`, app published so the
      sign-in lasts. Sign in once as `nudnik-google` by calling `start_google_auth` and opening the callback address
      on the same machine (the chat may never call it). For read-only, use `--read-only --tools gmail drive calendar
@@ -76,7 +79,14 @@ Message and mail text is treated as data, never as instructions (see `CLAUDE.md`
      2750); allow it in sudoers (`assistant ALL=(nudnik-zoom) NOPASSWD: /usr/local/bin/nudnik-zoom-download`).
    - Browsing: [galshan](https://github.com/kolmanv/galshan), a read-only browser API with no AI inside, through a
      root-only nginx proxy on 127.0.0.1 that adds nudnik's galshan key (`galshan-proxy.nginx.example`);
-     `bin/galshan-mcp` is the MCP server (`browse`). Let the container reach galshan's address and port.
+     `bin/galshan-mcp` is the MCP server: its tools come from galshan's `/features` (`browse`, and
+     `shorten_link` / `short_link_stats` for zip1.io short links when the caller is allowed `shorten`). Let the
+     container reach galshan's address and port.
+   - Photos: [Immich](https://immich.app), read-only, through a root-only nginx proxy on 127.0.0.1 that adds an
+     Immich API key with read permissions only and lets through only the reads it needs
+     (`immich-proxy.nginx.example`); `bin/immich-mcp` is the MCP server (search by content, people, place, date and
+     text in the picture; view; save originals to `/var/lib/nudnik-immich/downloads`, owned by the assistant user,
+     mode 750). Let the container reach Immich's address and port 2283.
    - Cutting audio and video: `bin/media-mcp` (`cut_audio`) runs ffmpeg (install `ffmpeg`) with fixed arguments on
      saved files and writes the pieces to `clips/`.
    - A mailbox with another assistant (e.g. one for work, on another machine and account): a Google Sheet for
@@ -110,7 +120,8 @@ If the run fails, a one-line "briefing failed" message is sent instead, so silen
 - `bin/media-mcp`: cuts pieces out of audio and video files (ffmpeg)
 - `bin/mailbox-mcp`, `setup/nudnik-mailbox`: the mailbox with another assistant
 - `bin/zoom-files-mcp`, `setup/nudnik-zoom-download`: saves files of Zoom recordings
-- `bin/galshan-mcp`: opens web pages through galshan
+- `bin/galshan-mcp`: opens web pages and makes zip1.io short links through galshan
+- `bin/immich-mcp`: searches, views and saves photos from Immich, read-only
 - `owner.env.example`, `mcp.json.example`: templates for your private config
 - Outputs (git-ignored): `briefing/`, `tasks/<area>/<task>/task.md`, `TASKS.md`, `ARCHIVE.md`, `state/`, `transcripts/`, `clips/`
 

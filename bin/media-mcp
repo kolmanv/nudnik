@@ -15,7 +15,7 @@ import time
 
 DIRS = [os.path.realpath(os.path.expanduser(d)) for d in os.environ.get(
     "MEDIA_DIRS",
-    "~/.claude/channels/telegram/inbox:~/.claude/projects:/var/lib/nudnik-google/attachments:/var/lib/nudnik-zoom/downloads:~/nudnik/clips").split(":")
+    "~/.claude/channels/telegram/inbox:~/.claude/projects:/var/lib/nudnik-google/attachments:/var/lib/nudnik-zoom/downloads:/var/lib/nudnik-immich/downloads:~/nudnik/clips").split(":")
     if d]
 OUT = os.path.expanduser(os.environ.get("MEDIA_OUT", "~/nudnik/clips"))
 TC = re.compile(r"^(\d{1,2}:)?(\d{1,2}:)?\d{1,2}(\.\d{1,3})?$")

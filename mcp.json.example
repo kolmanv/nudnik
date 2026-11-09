@@ -7,6 +7,7 @@
     "media": {"type": "stdio", "command": "/home/<user>/nudnik/bin/media-mcp"},
     "mailbox": {"type": "stdio", "command": "/home/<user>/nudnik/bin/mailbox-mcp"},
     "zoom-files": {"type": "stdio", "command": "/home/<user>/nudnik/bin/zoom-files-mcp"},
-    "galshan": {"type": "stdio", "command": "/home/<user>/nudnik/bin/galshan-mcp"}
+    "galshan": {"type": "stdio", "command": "/home/<user>/nudnik/bin/galshan-mcp"},
+    "immich": {"type": "stdio", "command": "/home/<user>/nudnik/bin/immich-mcp"}
   }
 }
