@@ -130,6 +130,7 @@
     ],
     "ask": [
       "mcp__google__send_gmail_message",
+      "mcp__katzran__transcribe_long",
       "mcp__zoom__meeting_delete",
       "mcp__zoom__in_meeting_control",
       "WebFetch"
